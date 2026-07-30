@@ -63,7 +63,7 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 # ---- Start services in tmux ----
 tmux new-session -d -s "$SESSION" -n "texlyre" \; \
-  send-keys "cd texlyre && node scripts/pm.cjs vite --port $PORT_HTTP --host 0.0.0.0 --base=/ --server.hmr.clientPort=$PORT_HTTP" Enter
+  send-keys "cd texlyre && node scripts/pm.cjs vite --port $PORT_HTTP --host 0.0.0.0 --base=/" Enter
 
 sleep 1
 
