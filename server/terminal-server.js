@@ -1,29 +1,26 @@
 #!/usr/bin/env node
-/**
- * Terminal Server — WebSocket shell in the browser.
- *
- * Each WebSocket connection gets a real bash session on the server
- * (via node-pty).  Users can run any command, including `codex`.
- *
- * Usage:  node server/terminal-server.js [port]
- */
+// Terminal Server — WebSocket shell in the browser.
+// Uses CommonJS so Node.js resolves node_modules from texlyre/ correctly.
+//
+// Usage:  cd texlyre && node ../server/terminal-server.js [port]
 
-import { spawn } from 'node:child_process';
-import { createServer } from 'node:http';
-import { WebSocketServer } from 'ws';
-import { homedir, hostname } from 'node:os';
-import { resolve } from 'node:path';
+const { spawn } = require('node:child_process');
+const http = require('node:http');
+const path = require('node:path');
+const { homedir, hostname, EOL } = require('node:os');
+
+const { WebSocketServer } = require('ws');
 
 const PORT = parseInt(process.argv[2] || '8084', 10);
-const CWD = resolve(process.argv[3] || '.');
+const CWD = path.resolve(process.argv[3] || '.');
 
-// ---- Minimal pty fallback: use raw spawn if node-pty not available ----
+// ---- Try node-pty, fall back to raw spawn ----
 let spawnPty;
 try {
-  const pty = await import('node-pty');
+  const pty = require('node-pty');
   spawnPty = (cwd) => {
     const shell = process.env.SHELL || 'bash';
-    const term = pty.default.spawn(shell, [], {
+    const term = pty.spawn(shell, [], {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,
@@ -32,8 +29,9 @@ try {
     });
     return term;
   };
+  console.log('  Using node-pty (full terminal support)');
 } catch {
-  console.log('  node-pty not available; using raw child process (limited terminal support)');
+  console.log('  node-pty not available; using raw child process');
   spawnPty = (cwd) => {
     const shell = process.env.SHELL || 'bash';
     const child = spawn(shell, [], {
@@ -52,7 +50,7 @@ try {
 }
 
 // ---- HTTP server ----
-const server = createServer((_req, res) => {
+const server = http.createServer((_req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Terminal WebSocket server\n');
 });
@@ -76,9 +74,11 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('message', (data) => {
-    const msg = JSON.parse(data.toString());
-    if (msg.type === 'input') term.write(msg.data);
-    if (msg.type === 'resize') term.resize(msg.cols, msg.rows);
+    try {
+      const msg = JSON.parse(data.toString());
+      if (msg.type === 'input') term.write(msg.data);
+      if (msg.type === 'resize') term.resize(msg.cols, msg.rows);
+    } catch {}
   });
 
   ws.on('close', () => {
@@ -93,6 +93,5 @@ wss.on('connection', (ws) => {
 server.listen(PORT, () => {
   console.log(`\nTerminal server running on ws://0.0.0.0:${PORT}`);
   console.log(`  CWD: ${CWD}`);
-  console.log(`  Connect from browser via WebSocket to ws://host:${PORT}`);
   console.log();
 });
