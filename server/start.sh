@@ -35,6 +35,11 @@ if ! command -v node &>/dev/null; then
   echo "ERROR: Node.js is required (>=20)"
   exit 1
 fi
+# node-pty needs make+gcc to compile
+if ! command -v make &>/dev/null; then
+  echo "Installing build tools (make, gcc)..."
+  sudo apt update -qq && sudo apt install build-essential -y -qq
+fi
 
 # ---- Install + Build ----
 if [ ! -d "texlyre/node_modules" ]; then
