@@ -18,9 +18,13 @@ public/core/tikz-editor/*
 public/core/texfmt/*
 public/core/busytex/*
 
-src/plugins/
-!src/plugins/PluginRegistry.ts
-!src/plugins/PluginInterface.ts
+src/plugins/viewers/
+src/plugins/renderers/
+src/plugins/loggers/
+src/plugins/themes/
+src/plugins/backup/
+src/plugins/bibliography/
+src/plugins/collaborative_viewers/
 
 # Editor directories and files
 .vscode/*

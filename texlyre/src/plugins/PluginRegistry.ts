@@ -1,0 +1,357 @@
+// src/plugins/PluginRegistry.ts
+import plugins from './index';
+import type { Setting } from '../contexts/SettingsContext';
+import type {
+	BackupPlugin,
+	CollaborativeViewerPlugin,
+	LoggerPlugin,
+	BibliographyPlugin,
+	LSPPlugin,
+	Plugin,
+	PluginRegistry,
+	RendererPlugin,
+	ThemePlugin,
+	ViewerPlugin,
+} from './PluginInterface';
+import { createNamedLogger } from '@/logging';
+
+const moduleLog = createNamedLogger('PluginRegistry');
+
+
+export const pluginSettings: Setting[] = [];
+
+class PluginRegistryManager {
+	private registry: PluginRegistry = {
+		viewers: [],
+		collaborativeViewers: [],
+		renderers: [],
+		loggers: [],
+		lsp: [],
+		bibliography: [],
+		backup: [],
+		themes: [],
+	};
+
+	constructor() {
+		this.loadPlugins();
+	}
+
+	private loadPlugins() {
+		try {
+			if (plugins.viewers && Object.keys(plugins.viewers).length > 0) {
+				moduleLog.info('Loading viewers:', Object.keys(plugins.viewers));
+				Object.values(plugins.viewers).forEach((plugin: ViewerPlugin) => {
+					this.registerPlugin(plugin);
+					if (plugin.settings && Array.isArray(plugin.settings)) {
+						pluginSettings.push(...plugin.settings);
+					}
+				});
+			}
+
+			if (plugins.collaborative_viewers && Object.keys(plugins.collaborative_viewers).length > 0) {
+				moduleLog.info(
+					'Loading collaborative viewers:',
+					Object.keys(plugins.collaborative_viewers),
+				);
+				Object.values(plugins.collaborative_viewers).forEach((plugin: CollaborativeViewerPlugin) => {
+					this.registerPlugin(plugin);
+					if (plugin.settings && Array.isArray(plugin.settings)) {
+						pluginSettings.push(...plugin.settings);
+					}
+				});
+			}
+
+			if (plugins.renderers && Object.keys(plugins.renderers).length > 0) {
+				moduleLog.info('Loading renderers:', Object.keys(plugins.renderers));
+				Object.values(plugins.renderers).forEach((plugin: RendererPlugin) => {
+					this.registerPlugin(plugin);
+					if (plugin.settings && Array.isArray(plugin.settings)) {
+						pluginSettings.push(...plugin.settings);
+					}
+				});
+			}
+
+			if (plugins.loggers && Object.keys(plugins.loggers).length > 0) {
+				moduleLog.info('Loading loggers:', Object.keys(plugins.loggers));
+				Object.values(plugins.loggers).forEach((plugin: LoggerPlugin) => {
+					this.registerPlugin(plugin);
+					if (plugin.settings && Array.isArray(plugin.settings)) {
+						pluginSettings.push(...plugin.settings);
+					}
+				});
+			}
+
+			if (plugins.bibliography && Object.keys(plugins.bibliography).length > 0) {
+				moduleLog.info('Loading bibliography plugins:', Object.keys(plugins.bibliography));
+				Object.values(plugins.bibliography).forEach((plugin: BibliographyPlugin) => {
+					this.registerPlugin(plugin);
+					if (plugin.settings && Array.isArray(plugin.settings)) {
+						pluginSettings.push(...plugin.settings);
+					}
+				});
+			}
+
+			if (plugins.lsp && Object.keys(plugins.lsp).length > 0) {
+				moduleLog.info('Loading LSP plugins:', Object.keys(plugins.lsp));
+				Object.values(plugins.lsp).forEach((plugin: LSPPlugin) => {
+					this.registerPlugin(plugin);
+					if (plugin.settings && Array.isArray(plugin.settings)) {
+						pluginSettings.push(...plugin.settings);
+					}
+				});
+			}
+
+			if (plugins.backup && Object.keys(plugins.backup).length > 0) {
+				moduleLog.info('Loading backup plugins:', Object.keys(plugins.backup));
+				Object.values(plugins.backup).forEach((plugin: BackupPlugin) => {
+					this.registerPlugin(plugin);
+					if (plugin.settings && Array.isArray(plugin.settings)) {
+						pluginSettings.push(...plugin.settings);
+					}
+				});
+			}
+
+			if (plugins.themes && Object.keys(plugins.themes).length > 0) {
+				moduleLog.info('Loading themes:', Object.keys(plugins.themes));
+				Object.values(plugins.themes).forEach((plugin: ThemePlugin) => {
+					this.registerPlugin(plugin);
+					if (plugin.settings && Array.isArray(plugin.settings)) {
+						pluginSettings.push(...plugin.settings);
+					}
+				});
+			}
+		} catch (error) {
+			moduleLog.error('Failed to load plugins:', error);
+		}
+	}
+
+	refreshPluginSettings(): Setting[] {
+		const freshSettings: Setting[] = [];
+
+		this.registry.viewers.forEach(plugin => {
+			if (plugin.settings) {
+				freshSettings.push(...plugin.settings);
+			}
+		});
+
+		this.registry.collaborativeViewers.forEach(plugin => {
+			if (plugin.settings) {
+				freshSettings.push(...plugin.settings);
+			}
+		});
+
+		this.registry.renderers.forEach(plugin => {
+			if (plugin.settings) {
+				freshSettings.push(...plugin.settings);
+			}
+		});
+
+		this.registry.loggers.forEach(plugin => {
+			if (plugin.settings) {
+				freshSettings.push(...plugin.settings);
+			}
+		});
+
+		this.registry.bibliography.forEach(plugin => {
+			if (plugin.settings) {
+				freshSettings.push(...plugin.settings);
+			}
+		});
+
+		this.registry.lsp.forEach(plugin => {
+			if (plugin.settings) {
+				freshSettings.push(...plugin.settings);
+			}
+		});
+
+		this.registry.backup.forEach(plugin => {
+			if (plugin.settings) {
+				freshSettings.push(...plugin.settings);
+			}
+		});
+
+		this.registry.themes.forEach(plugin => {
+			if (plugin.settings) {
+				freshSettings.push(...plugin.settings);
+			}
+		});
+
+		return freshSettings;
+	}
+
+	registerPlugin(plugin: Plugin) {
+		moduleLog.info('Registering plugin:', plugin.name, 'of type:', plugin.type);
+
+		switch (plugin.type) {
+			case 'viewer':
+				this.registry.viewers.push(plugin as ViewerPlugin);
+				break;
+			case 'collaborative-viewer':
+				this.registry.collaborativeViewers.push(
+					plugin as CollaborativeViewerPlugin,
+				);
+				break;
+			case 'renderer':
+				this.registry.renderers.push(plugin as RendererPlugin);
+				break;
+			case 'logger':
+				this.registry.loggers.push(plugin as LoggerPlugin);
+				break;
+			case 'bibliography':
+				this.registry.bibliography.push(plugin as BibliographyPlugin);
+				break;
+			case 'lsp':
+				this.registry.lsp.push(plugin as LSPPlugin);
+				break;
+			case 'backup':
+				this.registry.backup.push(plugin as BackupPlugin);
+				break;
+			case 'theme':
+				this.registry.themes.push(plugin as ThemePlugin);
+				break;
+			default:
+				moduleLog.warn(`Unsupported plugin type: ${plugin.type}`);
+		}
+	}
+
+	getViewers(): ViewerPlugin[] {
+		return this.registry.viewers;
+	}
+
+	getViewerForFile(fileName: string, mimeType?: string): ViewerPlugin | null {
+		for (const viewer of this.registry.viewers) {
+			if (viewer.canHandle(fileName, mimeType)) {
+				return viewer;
+			}
+		}
+		return null;
+	}
+
+	getEditableViewersWithExtensions(): ViewerPlugin[] {
+		return this.registry.viewers.filter(
+			v => v.isEditable && v.getSupportedExtensions
+		);
+	}
+
+	getCollaborativeViewers(): CollaborativeViewerPlugin[] {
+		return this.registry.collaborativeViewers;
+	}
+
+	getCollaborativeViewerForFile(
+		fileName: string,
+		mimeType?: string,
+	): CollaborativeViewerPlugin | null {
+
+		for (const viewer of this.registry.collaborativeViewers) {
+
+			if (viewer.canHandle(fileName, mimeType)) {
+				return viewer;
+			}
+		}
+		// console.log('[PluginRegistry] No collaborative viewer found for:', fileName, mimeType);
+		return null;
+	}
+
+	getRenderers(): RendererPlugin[] {
+		return this.registry.renderers;
+	}
+
+	getRendererIfAvailable(
+		outputType: string,
+		rendererPluginIds: string[],
+		getSetting: (id: string) => { value?: unknown } | undefined,
+	): RendererPlugin | null {
+		for (const rendererId of rendererPluginIds) {
+			const renderer = this.getRendererForOutput(outputType, rendererId);
+			if (!renderer) continue;
+
+			const enableSetting = getSetting(`${renderer.id}-enable`);
+			if (enableSetting !== undefined && enableSetting.value === false) continue;
+
+			return renderer;
+		}
+		return null;
+	}
+
+	getRendererForOutput(outputType: string, preferredRenderer?: string): RendererPlugin | null {
+		const availableRenderers = this.registry.renderers.filter(renderer =>
+			renderer.canHandle(outputType)
+		);
+
+		if (availableRenderers.length === 0) return null;
+
+		if (preferredRenderer) {
+			const preferred = availableRenderers.find(renderer =>
+				renderer.id === preferredRenderer
+			);
+			if (preferred) return preferred;
+		}
+
+		return availableRenderers[0];
+	}
+
+	getLoggers(): LoggerPlugin[] {
+		return this.registry.loggers;
+	}
+
+	getLoggerForType(logType: string): LoggerPlugin | null {
+		for (const logger of this.registry.loggers) {
+			if (logger.canHandle(logType)) {
+				return logger;
+			}
+		}
+		return null;
+	}
+
+	getBibliographyPlugins(): BibliographyPlugin[] {
+		return this.registry.bibliography;
+	}
+
+	getBibliographyPlugin(id: string): BibliographyPlugin | null {
+		return this.registry.bibliography.find(plugin => plugin.id === id) || null;
+	}
+
+	getAllBibliographyPlugins(): BibliographyPlugin[] {
+		return [...this.registry.bibliography];
+	}
+
+	getLSPPlugins(): LSPPlugin[] {
+		return this.registry.lsp;
+	}
+
+	getLSPPlugin(id: string): LSPPlugin | null {
+		return this.registry.lsp.find(plugin => plugin.id === id) || null;
+	}
+
+	getEnabledLSPPlugins(): LSPPlugin[] {
+		return this.registry.lsp.filter(plugin => plugin.isEnabled());
+	}
+
+	getAllLSPPlugins(): LSPPlugin[] {
+		return [...this.registry.lsp];
+	}
+
+	getLSPPluginsForFileType(fileType: string): LSPPlugin[] {
+		return this.registry.lsp.filter(plugin =>
+			plugin.isEnabled() && plugin.getSupportedFileTypes().includes(fileType)
+		);
+	}
+
+	getBackup(): BackupPlugin[] {
+		return this.registry.backup;
+	}
+
+	getBackupById(id: string): BackupPlugin | null {
+		return this.registry.backup.find((plugin) => plugin.id === id) || null;
+	}
+
+	getThemes(): ThemePlugin[] {
+		return this.registry.themes;
+	}
+
+	getThemeById(id: string): ThemePlugin | null {
+		return this.registry.themes.find((theme) => theme.id === id) || null;
+	}
+}
+
+export const pluginRegistry = new PluginRegistryManager();
