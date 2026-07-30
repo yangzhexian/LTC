@@ -31,8 +31,7 @@ import type { ProjectType, ProjectGroup } from '../../types/projects';
 import BackupModal from '../backup/BackupModal';
 import BackupStatusIndicator from '../backup/BackupStatusIndicator';
 import ChatPanel from '../chat/ChatPanel';
-import { AIChatProvider } from '../../contexts/AIChatContext';
-import AIChatPanel from '../ai/AIChatPanel';
+import TerminalPanel from '../ai/TerminalPanel';
 import CollabStatusIndicator from '../collab/CollabStatusIndicator';
 import { EditIcon, ProjectsIcon } from '../common/Icons';
 import Modal from '../common/Modal';
@@ -739,10 +738,7 @@ const EditorAppView: React.FC<EditorAppProps> = ({
 				</p>
 
 				<ChatPanel className='footer-chat' />
-				<AIChatPanel
-					className='footer-ai-chat'
-					currentDocumentContent={selectedDocument?.content}
-				/>
+				<TerminalPanel className='footer-terminal' />
 			</footer>
 
 			<KeyboardShortcutsModal
@@ -858,23 +854,21 @@ const EditorApp: React.FC<EditorAppProps> = (props) => {
 	return (
 		<CollabProvider docUrl={props.docUrl} collectionName='yjs_metadata'>
 			<ChatProvider docUrl={props.docUrl}>
-				<AIChatProvider>
-					<FileTreeProvider docUrl={props.docUrl}>
-						<FileSyncProvider docUrl={props.docUrl}>
-							<LaTeXProvider>
-								<TypstProvider>
-									<ExternalCompilerProvider>
-										<SourceMapProvider>
-											<ContentFormatterProvider>
-												<EditorAppView {...props} />
-											</ContentFormatterProvider>
-										</SourceMapProvider>
-									</ExternalCompilerProvider>
-								</TypstProvider>
-							</LaTeXProvider>
-						</FileSyncProvider>
-					</FileTreeProvider>
-				</AIChatProvider>
+			<FileTreeProvider docUrl={props.docUrl}>
+				<FileSyncProvider docUrl={props.docUrl}>
+					<LaTeXProvider>
+						<TypstProvider>
+							<ExternalCompilerProvider>
+								<SourceMapProvider>
+									<ContentFormatterProvider>
+										<EditorAppView {...props} />
+									</ContentFormatterProvider>
+								</SourceMapProvider>
+							</ExternalCompilerProvider>
+						</TypstProvider>
+					</LaTeXProvider>
+				</FileSyncProvider>
+			</FileTreeProvider>
 			</ChatProvider>
 		</CollabProvider>
 	);

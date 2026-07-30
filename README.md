@@ -19,10 +19,10 @@ A zero-friction setup for real-time collaborative LaTeX editing on a remote serv
 
 ```
 Linux Server
-├── TeXlyre (React SPA)  —  http://localhost:8080
-├── Yjs WebSocket Server  —  ws://localhost:8082  (document sync)
-├── Codex Proxy           —  http://localhost:8083  (AI assistant)
-└── WASM LaTeX engines    —  in-browser, no TeX Live needed
+├── TeXlyre (React SPA)   —  http://localhost:8080
+├── Yjs WebSocket Server   —  ws://localhost:8082  (document sync)
+├── Terminal WebSocket     —  ws://localhost:8084  (shell: codex, latexmk, git...)
+└── WASM LaTeX engines     —  in-browser, no TeX Live needed
 
 Users → open http://server-ip:8080 in browser → real-time editing
 ```
@@ -49,32 +49,17 @@ see the default project dashboard.  To collaborate:
 2. User B opens the link in their browser → both edit in real-time
 3. Each user's browser compiles LaTeX independently (WASM)
 
-### AI Assistant
+### Terminal (AI & more)
 
-The AI proxy (port 8083) supports multiple backends.  Set the API Base URL
-in TeXlyre's AI Assistant settings to `http://server-ip:8083`.
+The browser terminal panel connects to a real shell on the server (port 8084).
+Use it like VS Code's integrated terminal:
 
-| Backend | API Key needed? | How to use |
-|---------|----------------|------------|
-| `anthropic` (default) | Anthropic API key | Reads from `~/.anthropic/config` (shared with `codex` CLI). Free credits available. |
-| `openai` | OpenAI API key | Set env `OPENAI_API_KEY`. gpt-4o-mini is ~$0.15/1M tokens. |
-| `ollama` | **None** | `sudo apt install ollama && ollama pull llama3`. Fully free, fully local. |
-| `chatgpt` | Session token (experimental) | Set env `CHATGPT_SESSION_TOKEN` from chat.openai.com cookies. Uses Plus subscription. |
+- Run `codex` — the full CLI agent, no proxy or API key needed
+- Run `latexmk`, `git`, `python3`, or any command
+- Everything runs inside the project directory
 
-Choose the backend when starting the server:
-```bash
-# Ollama (free, no API key)
-AI_PROXY_BACKEND=ollama bash server/start.sh
-
-# OpenAI API key
-AI_PROXY_BACKEND=openai OPENAI_API_KEY=sk-... bash server/start.sh
-
-# ChatGPT Plus (experimental)
-AI_PROXY_BACKEND=chatgpt CHATGPT_SESSION_TOKEN=... bash server/start.sh
-
-# Default (Anthropic / codex CLI)
-bash server/start.sh
-```
+No configuration needed — just click the **Terminal** panel in the browser
+and type your commands.
 
 ---
 
@@ -149,9 +134,9 @@ This creates a tmux session named `ltc` with two windows — one for `latexmk -p
 │   └── placeholder.pdf
 ├── sections/             # Split .tex files (optional)
 ├── server/
-│   ├── start.sh          # Centralized TeXlyre server launcher
-│   ├── yjs-ws-server.js  # Yjs WebSocket server (document sync)
-│   └── codex-proxy.js    # Codex CLI proxy (OpenAI-compatible API)
+│   ├── start.sh           # Centralized TeXlyre server launcher
+│   ├── yjs-ws-server.js   # Yjs WebSocket server (document sync)
+│   └── terminal-server.js # WebSocket shell terminal
 ├── scripts/
 │   ├── httpserver.py     # Custom PDF-only HTTP server (auto-refresh)
 │   ├── start.sh          # Single-project launcher (tmux-based)

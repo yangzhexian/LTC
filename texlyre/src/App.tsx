@@ -45,7 +45,7 @@ import './styles/components/sourcemap.css';
 import './styles/components/url-metadata.css';
 import './styles/components/bibliography.css';
 import './styles/components/chat.css';
-import './styles/components/ai-chat.css';
+import './styles/components/terminal.css';
 import './styles/components/latex-typst.css';
 import './styles/components/plugin-header.css';
 import './styles/components/plugin-toolbar.css';

@@ -1,0 +1,91 @@
+/* Terminal panel */
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.85rem;
+}
+
+.terminal-panel.collapsed {
+  flex: 0 0 auto;
+}
+
+.terminal-panel.expanded {
+  flex: 1;
+  min-height: 150px;
+}
+
+.terminal-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  cursor: pointer;
+  user-select: none;
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  color: #cdd6f4;
+}
+
+.terminal-panel-title {
+  font-weight: 600;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.terminal-status.connected {
+  background: #a6e3a1;
+}
+
+.terminal-status.disconnected {
+  background: #f38ba8;
+}
+
+.terminal-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terminal-ws-url {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  font-family: monospace;
+}
+
+.terminal-panel-controls button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cdd6f4;
+  font-size: 0.75rem;
+  padding: 2px 4px;
+}
+
+.terminal-container {
+  flex: 1;
+  padding: 4px;
+  min-height: 0;
+}
+
+.terminal-container .xterm {
+  height: 100%;
+  padding: 4px;
+}
+
+.terminal-container .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: #45475a transparent;
+}
