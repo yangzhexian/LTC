@@ -121,10 +121,7 @@ case "$CMD" in
     start)
         # Create the tmux session if it doesn't exist
         if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-            # Create a hidden first window (will be killed after)
-            tmux new-session -d -s "$SESSION" -n "_bootstrap" \; \
-                set-option -t "$SESSION" destroy-unattached off
-            tmux kill-window -t "${SESSION}:_bootstrap"
+            tmux new-session -d -s "$SESSION" -n "_bootstrap"
         fi
 
         echo "=== Starting projects in $BASE_DIR ==="
@@ -135,6 +132,9 @@ case "$CMD" in
             fi
             start_project "$n" "$d" "$pt"
         done
+
+        # Kill the bootstrap window only AFTER real project windows exist
+        tmux kill-window -t "${SESSION}:_bootstrap" 2>/dev/null || true
 
         echo ""
         echo "Use: tmux attach -t $SESSION"
