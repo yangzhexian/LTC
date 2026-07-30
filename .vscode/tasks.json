@@ -109,6 +109,23 @@
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "SSH Mode: Shared LaTeX Watcher",
+            "dependsOn": [
+                "Initial Build",
+                "latexmk (continuous watch)"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": [],
+            "presentation": {
+                "group": "ltc_group",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "group": {
+                "kind": "build"
+            }
         }
     ]
 }

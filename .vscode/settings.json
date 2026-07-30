@@ -2,6 +2,7 @@
     // ---- LaTeX Workshop Configuration ----
 
     // Automatically build on save
+    // SSH mode: set to "never" and use the shared latexmk -pvc instead
     "latex-workshop.latex.autoBuild.run": "onSave",
 
     // Enable built-in PDF viewer for the Host (SyncTeX support)

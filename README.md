@@ -90,8 +90,8 @@ This creates a tmux session named `ltc` with two windows — one for `latexmk -p
 │   ├── start.sh          # Single-project launcher (tmux-based)
 │   └── manager.sh        # Multi-project manager (status/start/stop)
 ├── .vscode/
-│   ├── settings.json     # LaTeX Workshop config (auto-build on save, no PDF viewer)
-│   ├── tasks.json        # VS Code Task: "Start All Services"
+│   ├── settings.json     # LaTeX Workshop config (auto-build on save, built-in viewer)
+│   ├── tasks.json        # VS Code Task: "Start All Services" / "SSH Mode"
 │   └── extensions.json   # Recommended extensions
 └── .gitignore
 ```
@@ -226,6 +226,55 @@ ssh -L 8766:localhost:8766 user@server
 - Guests who only browse and don't edit won't trigger saves
 - Only the person who makes edits triggers a recompile
 - Anyone can trigger a manual save with `Ctrl+S`
+
+---
+
+## SSH Hybrid Mode (Everyone Has SSH + SyncTeX)
+
+If every collaborator has SSH access to the server, they can all enjoy **SyncTeX**
+while still editing together via Live Share.
+
+### Architecture
+
+```
+Everyone:  Remote-SSH + Live Share (edit) + LaTeX Workshop Viewer (SyncTeX)
+One user:  runs shared latexmk -pvc (compilation)
+
+No HTTP server needed — PDF is viewed directly via Remote-SSH.
+```
+
+### Setup
+
+1. **Server**: ensure every collaborator has a Linux user account with TeX Live + tmux.
+2. **Everyone** clones the project and opens via Remote-SSH:
+   ```bash
+   git clone <repo-url> ~/project
+   code ~/project
+   ```
+3. **One person** (e.g. Host) starts the shared LaTeX watcher:
+   - Press **`Ctrl+Shift+B`** → select **"SSH Mode: Shared LaTeX Watcher"**
+   - This runs `Initial Build` + `latexmk (continuous watch)` — no HTTP server
+4. **Everyone disables auto-build** in their own `settings.json` to prevent
+   multiple simultaneous compilations:
+   ```json
+   "latex-workshop.latex.autoBuild.run": "never"
+   ```
+   The shared `latexmk -pvc` handles all compilation.
+5. Host starts **Live Share** — everyone joins for real-time editing.
+6. Everyone opens the built-in PDF viewer (`Ctrl+Alt+V` → "View LaTeX PDF")
+   — **SyncTeX works for all**:
+   - Forward search: `Ctrl+Alt+J`
+   - Backward search: `Ctrl+Click` on PDF
+
+### Why shared latexmk?
+
+Without it, everyone's VS Code would trigger a separate `latexmk` on every save,
+causing file-lock conflicts and corrupt auxiliary files.  A single `-pvc` watcher
+avoids this entirely.
+
+### Port sharing
+
+No ports to share — everyone accesses the PDF through Remote-SSH directly.
 
 ---
 
