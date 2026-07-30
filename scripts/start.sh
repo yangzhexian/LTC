@@ -41,7 +41,7 @@ tmux new-session -d -s "$SESSION" -n "latexmk" \; \
 
 tmux new-window -t "$SESSION" -n "http" \; \
   send-keys "cd '$PROJECT_DIR'" Enter \
-  send-keys "python3 -m http.server $PORT" Enter
+  send-keys "python3 scripts/httpserver.py $PORT --dir \"$PROJECT_DIR\"" Enter
 
 # ---- Step 3: Print instructions ----
 echo "[3/3] Services running in tmux session '$SESSION'"

@@ -7,10 +7,10 @@ A zero-friction setup for real-time collaborative LaTeX editing on a remote serv
 ```
 Remote Linux Server (TeX Live)
 ├── latexmk — auto-compiles .tex on save
-├── python3 -m http.server — serves PDF on port 8766
+├── scripts/httpserver.py — serves ONLY the PDF on port 8766 (auto-refresh)
 └── VS Code Live Share — shares the port to Guests
 
-Guests → VS Code + Live Share → edit .tex files → refresh browser for PDF
+Guests → VS Code + Live Share → edit .tex files → browser auto-refreshes PDF
 ```
 
 ---
@@ -49,13 +49,17 @@ This launches three things **in sequence**:
 
 Each runs in its own terminal tab inside the VS Code terminal panel.
 
+> **Host**: Open the built-in PDF viewer (`Ctrl+Alt+V` → "View LaTeX PDF") for **SyncTeX** support — `Ctrl+Click` in PDF jumps to `.tex` source, `Ctrl+Alt+J` jumps from source to PDF.
+>
+> **Guests**: Browse to `http://localhost:8766/` — the PDF auto-refreshes every 2 seconds.
+
 ### 3. Share the port via Live Share
 
 1. Click **"Live Share"** in the status bar (bottom-right) to start a session
 2. Send the invite link to Guests (via chat, email, etc.)
 3. Open **Command Palette** (`Ctrl+Shift+P`) → **"Live Share: Share Ports"**
 4. Add port **`8766`**
-5. Tell Guests to open **`http://localhost:8766/main.pdf`** in their browser
+5. Tell Guests to open **`http://localhost:8766/`** in their browser (PDF auto-refreshes every 2s)
 
 ---
 
@@ -82,6 +86,7 @@ This creates a tmux session named `ltc` with two windows — one for `latexmk -p
 │   └── placeholder.pdf
 ├── sections/             # Split .tex files (optional)
 ├── scripts/
+│   ├── httpserver.py     # Custom PDF-only HTTP server (auto-refresh)
 │   └── start.sh          # CLI one-click launcher (tmux-based)
 ├── .vscode/
 │   ├── settings.json     # LaTeX Workshop config (auto-build on save, no PDF viewer)
@@ -109,8 +114,8 @@ This creates a tmux session named `ltc` with two windows — one for `latexmk -p
 **Workflow for Guests:**
 1. Click the Live Share invite link → VS Code opens the project
 2. Edit any `.tex` file — changes appear in real-time for everyone
-3. Open **`http://localhost:8766/main.pdf`** in a browser
-4. After Host saves a file, refresh the browser to see the updated PDF
+3. Open **`http://localhost:8766/`** in a browser
+4. The PDF auto-refreshes every ~2 seconds — no manual refresh needed
 
 ---
 
@@ -126,13 +131,17 @@ LaTeX Workshop (in `settings.json`) is set to:
 
 Every time any `.tex` file is saved (by any collaborator), `latexmk -pdflatex` runs automatically. The VS Code Task `latexmk (continuous watch)` also runs `latexmk -pvc` as a belt-and-suspenders watcher — it catches changes even if LaTeX Workshop's auto-build misses some edge case.
 
-### PDF viewer disabled
+### PDF viewer enabled (Host) + HTTP server (Guests)
 
+**Host**: The built-in LaTeX Workshop PDF viewer is enabled:
 ```json
-"latex-workshop.view.pdf.viewer": "none"
+"latex-workshop.view.pdf.viewer": "tab"
 ```
+This gives the Host full **SyncTeX** support:
+- **Forward search** (TeX → PDF): `Ctrl+Alt+J` — jumps from cursor position to the PDF
+- **Backward search** (PDF → TeX): `Ctrl+Click` on PDF text — opens the corresponding `.tex` line
 
-We disable the built-in PDF viewer because all collaborators access the PDF via the shared HTTP server. This avoids confusion about whose viewer is canonical.
+**Guests**: Access the PDF via `http://localhost:8766/` — the custom `httpserver.py` serves only `main.pdf` and an auto-refresh HTML wrapper (no SyncTeX, but the PDF updates automatically every ~2 seconds).
 
 ---
 
@@ -159,7 +168,7 @@ ss -tlnp | grep 8766
 # Kill it
 kill <PID>
 # Or use a different port:
-python3 -m http.server 8766
+python3 scripts/httpserver.py 8767
 ```
 
 ### 3. Browser cache
@@ -179,7 +188,13 @@ For a permanent fix, you can disable caching in the HTTP server. The `start.sh` 
 
 **Fix:** Host must re-share the port: Command Palette → "Live Share: Share Ports" → `8766`.
 
-### 5. Firewall blocks the port
+### 5. SyncTeX not working for Guests
+
+**Problem:** Guests click on PDF text expecting to jump to `.tex` source.
+
+**Fix:** SyncTeX is only available in LaTeX Workshop's built-in PDF viewer (Host side). Guests see a read-only PDF in the browser. This is by design — Guests edit `.tex` files directly in VS Code and use the HTTP PDF for visual reference only.
+
+### 6. Firewall blocks the port
 
 **Problem:** Guests want to access the server directly (without Live Share) but a firewall blocks port 8766.
 
@@ -193,7 +208,7 @@ Or use an SSH tunnel:
 ssh -L 8766:localhost:8766 user@server
 ```
 
-### 6. Auto-save vs manual save
+### 7. Auto-save vs manual save
 
 **Setting:** `"files.autoSave": "onFocusChange"` — saves when you click out of a file.
 

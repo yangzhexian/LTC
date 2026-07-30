@@ -9,13 +9,14 @@
     },
     "tasks": [
         {
-            "label": "HTTP Server (port 8766)",
+            "label": "HTTP PDF Server (port 8766)",
             "type": "shell",
             "command": "python3",
             "args": [
-                "-m",
-                "http.server",
-                "8766"
+                "${workspaceFolder}/scripts/httpserver.py",
+                "8766",
+                "--dir",
+                "${workspaceFolder}"
             ],
             "isBackground": true,
             "problemMatcher": {
@@ -29,7 +30,7 @@
                 ],
                 "background": {
                     "activeOnStart": true,
-                    "beginsPattern": "^Serving HTTP",
+                    "beginsPattern": "^LTC PDF Server",
                     "endsPattern": "."
                 }
             },
@@ -95,7 +96,7 @@
             "dependsOn": [
                 "Initial Build",
                 "latexmk (continuous watch)",
-                "HTTP Server (port 8766)"
+                "HTTP PDF Server (port 8766)"
             ],
             "dependsOrder": "sequence",
             "problemMatcher": [],

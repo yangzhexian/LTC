@@ -4,12 +4,15 @@
     // Automatically build on save
     "latex-workshop.latex.autoBuild.run": "onSave",
 
-    // Do NOT show LaTeX Workshop's built-in PDF viewer
-    // Guests will access the PDF via HTTP server
-    "latex-workshop.view.pdf.viewer": "none",
+    // Enable built-in PDF viewer for the Host (SyncTeX support)
+    // Guests access the PDF via HTTP server (auto-refresh, no SyncTeX)
+    "latex-workshop.view.pdf.viewer": "tab",
+    "latex-workshop.view.pdf.tab": true,
 
-    // Suppress the "Tab" viewer (pop-up PDF tab) as well
-    "latex-workshop.view.pdf.tab": false,
+    // SyncTeX: forward search from .tex to PDF (Ctrl+Alt+J)
+    "latex-workshop.synctex.afterBuild.enabled": true,
+    // SyncTeX: backward search from PDF to .tex (Ctrl+Click in PDF)
+    "latex-workshop.view.pdf.internal.synctex.keybinding": "ctrl-click",
 
     // ---- Build Recipe: latexmk with pdflatex ----
     "latex-workshop.latex.tools": [
