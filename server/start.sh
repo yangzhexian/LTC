@@ -55,12 +55,15 @@ if [ ! -d "texlyre/node_modules/.vite" ]; then
   (cd texlyre && node scripts/setup-assets.cjs 2>&1)
 fi
 
+# Copy config JSONs to public/ so Vite dev server can serve them
+cp texlyre/userdata.json texlyre/userdata.local.json texlyre/public/ 2>/dev/null
+
 # ---- Kill previous session ----
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 # ---- Start services in tmux ----
 tmux new-session -d -s "$SESSION" -n "texlyre" \; \
-  send-keys "cd texlyre && node scripts/pm.cjs vite --port $PORT_HTTP --host 0.0.0.0 --base=/" Enter
+  send-keys "cd texlyre && node scripts/pm.cjs vite --port $PORT_HTTP --host 0.0.0.0 --base=/ --server.hmr.clientPort=$PORT_HTTP" Enter
 
 sleep 1
 
