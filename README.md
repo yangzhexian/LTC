@@ -19,7 +19,7 @@ Guests → VS Code + Live Share → edit .tex files → browser auto-refreshes P
 
 | Requirement | Notes |
 |-------------|-------|
-| Remote Linux server | TeX Live + python3 installed |
+| Remote Linux server | TeX Live + python3 + tmux installed |
 | VS Code | With extensions: Remote-SSH, LaTeX Workshop, Live Share |
 | Guest VS Code | Only needs Live Share (extension auto-recommended via `.vscode/extensions.json`) |
 | SSH access | Host connects via Remote-SSH |

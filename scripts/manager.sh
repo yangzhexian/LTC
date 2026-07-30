@@ -17,6 +17,14 @@
 
 set -euo pipefail
 
+# ---- Dependency check ----
+if ! command -v tmux &>/dev/null; then
+    echo "ERROR: tmux is required but not installed."
+    echo "  Install it:  sudo apt install tmux   (Debian/Ubuntu)"
+    echo "               sudo yum install tmux   (RHEL/CentOS)"
+    exit 1
+fi
+
 BASE_DIR="$(cd "$1" 2>/dev/null && pwd)" || {
     echo "Usage: $0 <base-dir> {status|start|stop|restart} [project]"
     exit 1
