@@ -63,7 +63,7 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 # ---- Start services in tmux ----
 tmux new-session -d -s "$SESSION" -n "texlyre" \; \
-  send-keys "cd texlyre && node scripts/pm.cjs vite --port $PORT_HTTP --host 0.0.0.0 --base=/" Enter
+  send-keys "cd texlyre && node scripts/pm.cjs vite --port $PORT_HTTP --host 0.0.0.0" Enter
 
 sleep 1
 
@@ -81,7 +81,7 @@ cat <<EOF
 
 === READY ===
 
-  Web app:      http://$HOST_IP:$PORT_HTTP
+  Web app:      http://$HOST_IP:$PORT_HTTP/texlyre/
   Yjs sync:     ws://$HOST_IP:$PORT_WS
   Terminal:     ws://$HOST_IP:$PORT_TERM
 
