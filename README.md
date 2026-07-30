@@ -51,14 +51,30 @@ see the default project dashboard.  To collaborate:
 
 ### AI Assistant
 
-The AI panel uses the Codex proxy server (port 8083) by default after
-configuring the API Base URL in the AI Assistant settings to:
-```
-http://server-ip:8083
-```
+The AI proxy (port 8083) supports multiple backends.  Set the API Base URL
+in TeXlyre's AI Assistant settings to `http://server-ip:8083`.
 
-The proxy reads your Anthropic API key from `~/.anthropic/config`
-(shared with the local `codex` CLI).  No separate key setup needed.
+| Backend | API Key needed? | How to use |
+|---------|----------------|------------|
+| `anthropic` (default) | Anthropic API key | Reads from `~/.anthropic/config` (shared with `codex` CLI). Free credits available. |
+| `openai` | OpenAI API key | Set env `OPENAI_API_KEY`. gpt-4o-mini is ~$0.15/1M tokens. |
+| `ollama` | **None** | `sudo apt install ollama && ollama pull llama3`. Fully free, fully local. |
+| `chatgpt` | Session token (experimental) | Set env `CHATGPT_SESSION_TOKEN` from chat.openai.com cookies. Uses Plus subscription. |
+
+Choose the backend when starting the server:
+```bash
+# Ollama (free, no API key)
+AI_PROXY_BACKEND=ollama bash server/start.sh
+
+# OpenAI API key
+AI_PROXY_BACKEND=openai OPENAI_API_KEY=sk-... bash server/start.sh
+
+# ChatGPT Plus (experimental)
+AI_PROXY_BACKEND=chatgpt CHATGPT_SESSION_TOKEN=... bash server/start.sh
+
+# Default (Anthropic / codex CLI)
+bash server/start.sh
+```
 
 ---
 

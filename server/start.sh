@@ -18,6 +18,7 @@ cd "$(cd "$(dirname "$0")/.." && pwd)"
 PORT_HTTP=${1:-8080}
 PORT_WS=${2:-8082}
 PORT_CODEX=${3:-8083}
+AI_BACKEND=${4:-anthropic}   # anthropic | openai | ollama | chatgpt
 SESSION="texlyre-server"
 
 echo "=== TeXlyre Centralized Server ==="
@@ -65,7 +66,7 @@ tmux new-window -t "$SESSION" -n "yjs-ws" \; \
 sleep 0.5
 
 tmux new-window -t "$SESSION" -n "codex-proxy" \; \
-  send-keys "node server/codex-proxy.js $PORT_CODEX" Enter
+  send-keys "AI_PROXY_BACKEND=$AI_BACKEND node server/codex-proxy.js $PORT_CODEX" Enter
 
 # ---- Print info ----
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
