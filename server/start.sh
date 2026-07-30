@@ -70,7 +70,7 @@ tmux new-window -t "$SESSION" -n "yjs-ws" \; \
 sleep 0.5
 
 tmux new-window -t "$SESSION" -n "terminal" \; \
-  send-keys "node server/terminal-server.js $PORT_TERM" Enter
+  send-keys "cd texlyre && node ../server/terminal-server.js $PORT_TERM" Enter
 
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
