@@ -31,3 +31,6 @@ Thumbs.db
 texlyre/node_modules/
 texlyre/dist/
 texlyre/.env
+
+# ---- Server ----
+server/.yjs-data/

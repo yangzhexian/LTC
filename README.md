@@ -2,20 +2,67 @@
 
 A zero-friction setup for real-time collaborative LaTeX editing on a remote server.
 
-**How it works:**
+## Modes
 
-```
-Remote Linux Server (TeX Live)
-├── latexmk — auto-compiles .tex on save
-├── scripts/httpserver.py — serves ONLY the PDF on port 8766 (auto-refresh)
-└── VS Code Live Share — shares the port to Guests
-
-Guests → VS Code + Live Share → edit .tex files → browser auto-refreshes PDF
-```
+| Mode | Description | When to use |
+|------|-------------|-------------|
+| **SSH + Live Share** (VS Code) | Host compiles via SSH, Guests edit via Live Share, PDF via HTTP | Simple, TeX Live already installed |
+| **TeXlyre Server** (Browser) | Full Overleaf-like web editor with AI assistant | Real-time collab in browser, no VS Code needed |
 
 ---
 
-## Prerequisites (Host)
+## Quick Start — TeXlyre Server (Overleaf-like)
+
+**Best for**: multiple users editing simultaneously via browser, no VS Code needed.
+
+### Architecture
+
+```
+Linux Server
+├── TeXlyre (React SPA)  —  http://localhost:8080
+├── Yjs WebSocket Server  —  ws://localhost:8082  (document sync)
+├── Codex Proxy           —  http://localhost:8083  (AI assistant)
+└── WASM LaTeX engines    —  in-browser, no TeX Live needed
+
+Users → open http://server-ip:8080 in browser → real-time editing
+```
+
+### Start
+
+```bash
+git clone <repo-url> ~/ltc
+cd ~/ltc
+bash server/start.sh
+```
+
+This starts three services in a tmux session `texlyre-server`:
+1. **TeXlyre** — web app on port 8080
+2. **Yjs WebSocket** — document sync on port 8082
+3. **Codex proxy** — AI on port 8083
+
+### User configuration
+
+Each user opens `http://server-ip:8080` in their browser. First-time visitors
+see the default project dashboard.  To collaborate:
+
+1. User A creates a project → click **Share** → copy the link
+2. User B opens the link in their browser → both edit in real-time
+3. Each user's browser compiles LaTeX independently (WASM)
+
+### AI Assistant
+
+The AI panel uses the Codex proxy server (port 8083) by default after
+configuring the API Base URL in the AI Assistant settings to:
+```
+http://server-ip:8083
+```
+
+The proxy reads your Anthropic API key from `~/.anthropic/config`
+(shared with the local `codex` CLI).  No separate key setup needed.
+
+---
+
+## Quick Start — SSH + Live Share (Original)
 
 | Requirement | Notes |
 |-------------|-------|
@@ -85,6 +132,10 @@ This creates a tmux session named `ltc` with two windows — one for `latexmk -p
 ├── figures/              # Images / PDF figures
 │   └── placeholder.pdf
 ├── sections/             # Split .tex files (optional)
+├── server/
+│   ├── start.sh          # Centralized TeXlyre server launcher
+│   ├── yjs-ws-server.js  # Yjs WebSocket server (document sync)
+│   └── codex-proxy.js    # Codex CLI proxy (OpenAI-compatible API)
 ├── scripts/
 │   ├── httpserver.py     # Custom PDF-only HTTP server (auto-refresh)
 │   ├── start.sh          # Single-project launcher (tmux-based)
