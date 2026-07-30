@@ -1,0 +1,28 @@
+# ---- LaTeX build artifacts ----
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+*.xdv
+*-blx.bib
+
+# ---- Generated PDF ----
+*.pdf
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+
+# ---- VS Code ----
+.vscode/settings.json.user

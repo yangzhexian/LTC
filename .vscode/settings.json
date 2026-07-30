@@ -1,0 +1,66 @@
+{
+    // ---- LaTeX Workshop Configuration ----
+
+    // Automatically build on save
+    "latex-workshop.latex.autoBuild.run": "onSave",
+
+    // Do NOT show LaTeX Workshop's built-in PDF viewer
+    // Guests will access the PDF via HTTP server
+    "latex-workshop.view.pdf.viewer": "none",
+
+    // Suppress the "Tab" viewer (pop-up PDF tab) as well
+    "latex-workshop.view.pdf.tab": false,
+
+    // ---- Build Recipe: latexmk with pdflatex ----
+    "latex-workshop.latex.tools": [
+        {
+            "name": "latexmk",
+            "command": "latexmk",
+            "args": [
+                "-pdflatex",
+                "-interaction=nonstopmode",
+                "-synctex=1",
+                "-f",
+                "%DOC%"
+            ],
+            "env": {}
+        }
+    ],
+
+    "latex-workshop.latex.recipes": [
+        {
+            "name": "latexmk",
+            "tools": ["latexmk"]
+        }
+    ],
+
+    // Clean auxiliary files after build
+    "latex-workshop.latex.clean.method": "globClean",
+    "latex-workshop.latex.clean.files": [
+        "*.aux",
+        "*.bbl",
+        "*.blg",
+        "*.fdb_latexmk",
+        "*.fls",
+        "*.lof",
+        "*.lot",
+        "*.log",
+        "*.out",
+        "*.synctex.gz",
+        "*.toc"
+    ],
+
+    // ---- General VS Code settings ----
+    "files.autoSave": "onFocusChange",
+
+    // Editor: use 2-space indentation for .tex files
+    "[tex]": {
+        "editor.tabSize": 2,
+        "editor.wordWrap": "on"
+    },
+
+    "[latex]": {
+        "editor.tabSize": 2,
+        "editor.wordWrap": "on"
+    }
+}
