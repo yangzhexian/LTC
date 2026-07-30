@@ -278,6 +278,40 @@ No ports to share — everyone accesses the PDF through Remote-SSH directly.
 
 ---
 
+## TeXlyre — AI-Powered Web Editor
+
+A local Overleaf-like service with ChatGPT integration, based on [TeXlyre](https://github.com/texlyre/texlyre).
+
+### Features
+- **In-browser LaTeX/Typst compilation** (WASM, no server-side TeX Live needed)
+- **Real-time collaboration** via WebRTC (peer-to-peer, no server needed)
+- **AI Assistant** — chat with OpenAI-compatible APIs directly in the editor
+- **Local-first** — all data stored in IndexedDB, works offline
+- **SyncTeX** support for source-PDF navigation
+
+### Quick Start
+
+```bash
+cd texlyre
+cp .env.example .env   # edit with your OpenAI API key
+npm install
+npm run dev            # http://localhost:4173
+```
+
+### AI Assistant
+
+The built-in AI panel uses the **Secrets API** to store your API key (encrypted in localStorage). Click the ⚙ button to configure:
+
+| Setting | Description |
+|---------|-------------|
+| API Key | OpenAI API key (or any compatible provider) |
+| API Base URL | Default: `https://api.openai.com/v1` — change for local LLMs |
+| Model | Default: `gpt-4o-mini` |
+
+Toggle **"Include document context"** to send the current LaTeX source as context for the AI.
+
+---
+
 ## Multi-Project Management
 
 Use `scripts/manager.sh` to manage multiple LaTeX projects simultaneously under a

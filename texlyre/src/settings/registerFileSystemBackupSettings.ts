@@ -1,0 +1,60 @@
+// src/settings/registerFileSystemBackupSettings.ts
+import { useEffect, useRef } from 'react';
+
+import { t } from '@/i18n';
+import { useSettings } from '../hooks/useSettings';
+
+export function useRegisterFileSystemBackupSettings() {
+	const { registerSetting, getSetting } = useSettings();
+	const registered = useRef(false);
+
+	useEffect(() => {
+		if (registered.current) return;
+		registered.current = true;
+
+		const initialBackupEnabled =
+			(getSetting('file-sys-backup-enable')?.value as boolean) ?? false;
+		const initialAutoBackup =
+			(getSetting('file-sys-backup-auto-backup')?.value as boolean) ?? false;
+		// const initialAutoSync =
+		// 	(getSetting('file-sys-backup-auto-sync')?.value as boolean) ?? false;
+
+		registerSetting({
+			id: 'file-sys-backup-enable',
+			category: t('Backup'),
+			subcategory: t('File System'),
+			type: 'checkbox',
+			label: t('Enable file system backup'),
+			description: t(
+				'Sync your data to a local folder for backup and sharing via cloud storage',
+			),
+
+			defaultValue: initialBackupEnabled,
+		});
+
+		registerSetting({
+			id: 'file-sys-backup-auto-backup',
+			category: t('Backup'),
+			subcategory: t('File System'),
+			type: 'checkbox',
+			label: t('Auto-backup connection on startup'),
+			description: t(
+				'Automatically start connection to file system when the application loads (requires folder authorization)',
+			),
+
+			defaultValue: initialAutoBackup,
+			dependsOn: { id: 'file-sys-backup-enable', value: true, nest: true },
+			disabledReason: t('Requires: File system backup'),
+		});
+
+		// registerSetting({
+		// 	id: 'file-sys-backup-auto-sync',
+		// 	category: t('Backup'),
+		// 	subcategory: t('File System'),
+		// 	type: 'checkbox',
+		// 	label: t('Auto-sync on change'),
+		// 	description: t('Automatically synchronize when project files change'),
+		// 	defaultValue: initialAutoSync,
+		// });
+	}, [registerSetting, getSetting]);
+}

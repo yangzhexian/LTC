@@ -1,0 +1,89 @@
+{
+  "name": "TeXlyre",
+  "short_name": "texlyre",
+  "description": "A local-first LaTeX & Typst collaborative web editor",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "./assets/images/TeXlyre_notext_192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./?share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "files",
+          "accept": [
+            "text/plain",
+            "text/x-tex",
+            "application/x-tex",
+            "text/x-typst",
+            "application/x-bibtex",
+            "text/x-bibtex",
+            "application/zip",
+            "application/json",
+            "text/markdown",
+            "text/html",
+            "application/xml",
+            "text/xml",
+            "text/css",
+            "text/javascript",
+            "application/javascript",
+            ".tex",
+            ".latex",
+            ".typ",
+            ".typst",
+            ".bib",
+            ".bibtex",
+            ".zip",
+            ".json",
+            ".md",
+            ".html",
+            ".xml",
+            ".css",
+            ".js",
+            ".ts",
+            ".txt",
+            ".cls",
+            ".sty",
+            ".bst",
+            ".cfg",
+            ".def",
+            ".dtx",
+            ".ins",
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/bmp",
+            "image/webp",
+            "image/svg+xml",
+            "image/x-icon",
+            "application/pdf",
+            "application/vnd.jgraph.mxfile",
+            "text/x-tikz",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".bmp",
+            ".webp",
+            ".svg",
+            ".ico",
+            ".pdf",
+            ".drawio",
+            ".tikz"
+          ]
+        }
+      ]
+    }
+  }
+}

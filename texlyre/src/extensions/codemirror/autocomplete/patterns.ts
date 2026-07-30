@@ -1,0 +1,189 @@
+// src/extensions/codemirror/autocomplete/patterns.ts
+
+export const latexCommandPatterns = [
+	{
+		commands: ['includegraphics', 'includesvg'],
+		pattern: /\\(includegraphics|includesvg)(?:\[[^\]]*\])?\{([^}]*)/,
+		fileTypes: 'images' as const,
+		pathGroup: 2 as const,
+	},
+	{
+		commands: ['input', 'include', 'subfile'],
+		pattern: /\\(input|include|subfile)\{([^}]*)/,
+		fileTypes: 'tex' as const,
+		pathGroup: 2 as const,
+	},
+	{
+		commands: ['bibliography', 'addbibresource'],
+		pattern: /\\(bibliography|addbibresource)(?:\[[^\]]*\])?\{([^}]*)/,
+		fileTypes: 'bib' as const,
+		pathGroup: 2 as const,
+	},
+	{
+		commands: ['lstinputlisting', 'verbatiminput'],
+		pattern: /\\(lstinputlisting|verbatiminput)(?:\[[^\]]*\])?\{([^}]*)/,
+		fileTypes: 'all' as const,
+		pathGroup: 2 as const,
+	},
+];
+
+export const typstCommandPatterns = [
+	{
+		commands: ['include'],
+		pattern: /#include\s+"/,
+		fileTypes: 'typst' as const,
+	},
+	{
+		commands: ['import'],
+		pattern: /#import\s+"/,
+		fileTypes: 'typst' as const,
+	},
+	{
+		commands: ['image'],
+		pattern: /\bimage\s*\(\s*"/,
+		fileTypes: 'images' as const,
+	},
+	{
+		commands: ['video-svg'],
+		pattern: /\bvideo-svg\s*\(\s*"/,
+		fileTypes: 'videos' as const,
+	},
+	{
+		commands: ['audio-svg'],
+		pattern: /\baudio-svg\s*\(\s*"/,
+		fileTypes: 'audios' as const,
+	},
+	{
+		commands: ['read'],
+		pattern: /\bread\s*\(\s*"/,
+		fileTypes: 'all' as const,
+	},
+	{
+		commands: ['csv', 'json', 'yaml', 'toml', 'xml', 'cbor'],
+		pattern: /\b(csv|json|yaml|toml|xml|cbor)\s*\(\s*"/,
+		fileTypes: 'data' as const,
+	},
+	{
+		commands: ['bibliography'],
+		pattern: /#bibliography\("/,
+		fileTypes: 'bib' as const,
+	},
+];
+
+export const markdownCommandPatterns = [
+	{
+		commands: ['image'],
+		// ![alt](path
+		pattern: /!\[[^\]]*\]\(([^)\s]*)/,
+		fileTypes: 'images' as const,
+		pathGroup: 1 as const,
+	},
+	{
+		commands: ['link'],
+		pattern: /(^|[^!])\[[^\]]*\]\(([^)\s]*)/,
+		fileTypes: 'all' as const,
+		pathGroup: 2 as const,
+	},
+	{
+		commands: ['html-img-src-double'],
+		pattern: /<img\b[^>]*\bsrc="([^"]*)/i,
+		fileTypes: 'images' as const,
+		pathGroup: 1 as const,
+	},
+	{
+		commands: ['html-img-src-single'],
+		pattern: /<img\b[^>]*\bsrc='([^']*)/i,
+		fileTypes: 'images' as const,
+		pathGroup: 1 as const,
+	},
+	{
+		commands: ['html-a-href-double'],
+		pattern: /<a\b[^>]*\bhref="([^"]*)/i,
+		fileTypes: 'all' as const,
+		pathGroup: 1 as const,
+	},
+	{
+		commands: ['html-a-href-single'],
+		pattern: /<a\b[^>]*\bhref='([^']*)/i,
+		fileTypes: 'all' as const,
+		pathGroup: 1 as const,
+	},
+];
+
+export const typstCitationPatterns = [
+	{
+		commands: ['cite'],
+		pattern: /#cite\s*\(\s*</,
+		type: 'citation' as const,
+	},
+	{
+		commands: ['cite-label'],
+		pattern: /#cite\s*\(\s*label\s*\(\s*"/,
+		type: 'citation' as const,
+	},
+];
+
+export const citationCommandPatterns = [
+	{
+		commands: [
+			'cite',
+			'citep',
+			'citet',
+			'autocite',
+			'textcite',
+			'parencite',
+			'footcite',
+			'fullcite',
+			'smartcite',
+			'supercite',
+			'nocite',
+		],
+		pattern:
+			/\\([Cc]ite|[Cc]itep|[Cc]itet|[Aa]utocite|[Tt]extcite|[Pp]arencite|[Ff]ootcite|[Ff]ullcite|smartcite|supercite|nocite)\w*(?:\[[^\]]*\])?(?:\[[^\]]*\])?\{([^}]*)/,
+		type: 'citation' as const,
+	},
+	...typstCitationPatterns,
+];
+
+export const latexReferencePatterns = [
+	{
+		commands: [
+			'ref',
+			'eqref',
+			'pageref',
+			'autoref',
+			'nameref',
+			'cref',
+			'Cref',
+			'vref',
+			'Vref',
+			'crefrange',
+			'Crefrange',
+			'labelcref',
+			'vpageref',
+		],
+		pattern:
+			/\\(ref|eqref|pageref|autoref|nameref|cref|Cref|vref|Vref|crefrange|Crefrange|labelcref|vpageref)\*?\{([^}]*)/,
+		type: 'reference' as const,
+	},
+];
+
+export const typstReferencePatterns = [
+	{
+		commands: ['ref'],
+		pattern: /@([a-zA-Z0-9_:-]*)/,
+		type: 'reference-or-citation' as const,
+	},
+	{
+		commands: ['ref-function'],
+		pattern: /#ref\s*\(\s*<([^>]*)/,
+		type: 'reference' as const,
+	},
+];
+
+export const bibtexEntryPatterns = [
+	{
+		pattern: /@([a-zA-Z]*)\{([^,}]*)/,
+		type: 'bibtex-entry' as const,
+	},
+];

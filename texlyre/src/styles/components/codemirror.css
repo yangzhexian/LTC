@@ -1,0 +1,985 @@
+/* ============================================================
+   Syntax highlighting token variables
+   ============================================================ */
+
+:root {
+	--cm-color-keyword: #6f42c1;
+	--cm-color-def-keyword: #d73a49;
+	--cm-color-comment: var(--pico-muted-color, #6a737d);
+	--cm-color-atom: #0366d6;
+	--cm-color-atom-bg: rgba(3, 102, 214, 0.1);
+	--cm-color-property: #e36209;
+	--cm-color-string: #032f62;
+	--cm-color-number: #005cc5;
+	--cm-color-variable: #6f42c1;
+	--cm-color-operator: #d73a49;
+	--cm-color-punctuation: var(--pico-muted-color, #586069);
+	--cm-color-brace: var(--pico-color, #24292e);
+	--cm-color-ctrl: #0000cc;
+	--cm-color-env: #008800;
+	--cm-color-env-name: #990000;
+	--cm-color-math: #0086b3;
+	--cm-color-meta: #d73a49;
+	--cm-color-link: #0366d6;
+	--cm-color-argument: #dd1144;
+	--cm-color-editor-text: #24292e;
+	--cm-color-gutter-text: #6a737d;
+	--cm-color-active-line-bg: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme-mode="dark"] {
+	--cm-color-keyword: #b392f0;
+	--cm-color-def-keyword: #ff7b86;
+	--cm-color-comment: #7d8590;
+	--cm-color-atom: #58a6ff;
+	--cm-color-atom-bg: rgba(88, 166, 255, 0.15);
+	--cm-color-property: #ffa657;
+	--cm-color-string: #79c0ff;
+	--cm-color-number: #79c0ff;
+	--cm-color-variable: #b392f0;
+	--cm-color-operator: #ff7b86;
+	--cm-color-punctuation: #8b949e;
+	--cm-color-brace: #f0f6fc;
+	--cm-color-ctrl: #79c0ff;
+	--cm-color-env: #7ee787;
+	--cm-color-env-name: #ff7b86;
+	--cm-color-math: #79c0ff;
+	--cm-color-meta: #ff7b86;
+	--cm-color-link: #58a6ff;
+	--cm-color-argument: #ffa198;
+	--cm-color-editor-text: #ddd;
+	--cm-color-gutter-text: #999;
+	--cm-color-active-line-bg: rgba(255, 255, 255, 0.04);
+}
+
+/* ============================================================
+   Editor layout
+   ============================================================ */
+.cm-editor .cm-panel.cm-search button {
+	border-radius: var(--radius-sm);
+	padding: var(--space-xs) var(--space-sm);
+}
+
+.cm-panel.cm-search [name="close"] {
+	position: absolute;
+	top: 0;
+	right: var(--space-md);
+	background-color: inherit;
+	border: none;
+	font: inherit;
+	padding: 0;
+	margin: 0;
+}
+
+.codemirror-editor-container {
+	width: 100%;
+	height: 100%;
+	overflow: auto;
+}
+
+.codemirror-editor-container .cm-editor {
+	height: 100%;
+	/* color: var(--cm-color-editor-text); */
+	background-color: var(--pico-secondary-background);
+}
+
+.codemirror-editor-container .cm-editor.cm-focused {
+	outline: 2px solid var(--pico-primary);
+	outline-offset: -2px;
+	/* background-color: var(--pico-secondary-background) !important; */
+}
+
+.codemirror-editor-container .cm-scroller {
+	overflow: auto;
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: var(--editor-font-size, 18px) !important;
+	line-height: 1.5;
+	height: 100%;
+}
+
+.codemirror-editor-container .cm-content {
+	min-height: 100%;
+	/* white-space: pre-wrap; */
+	padding: var(--space-sm);
+	/* background-color: transparent !important; */
+}
+
+.codemirror-editor-container .cm-line {
+	padding: 0 var(--space-xs);
+}
+
+.codemirror-editor-container .cm-gutters {
+	background-color: var(--pico-background) !important;
+	/* color: var(--cm-color-gutter-text); */
+	border-right: 1px solid var(--accent-border);
+}
+
+.codemirror-editor-container .cm-lineNumbers .cm-gutterElement {
+	/* color: var(--pico-muted-color, #6a737d); */
+	padding: 0 var(--space-xs) 0 var(--space-sm);
+}
+
+.codemirror-editor-container .cm-completionInfo {
+	color: var(--cm-color-editor-text);
+	/* background-color: var(--pico-secondary-background); */
+}
+
+/* ============================================================
+   Bracket matching
+   ============================================================ */
+
+.codemirror-editor-container .cm-matchingBracket {
+	/* background-color: rgba(40, 167, 69, 0.2); */
+	outline: 1px solid var(--color-success);
+}
+
+.codemirror-editor-container .cm-nonmatchingBracket {
+	/* background-color: rgba(220, 53, 69, 0.2); */
+	outline: 1px solid var(--color-error);
+}
+
+/* ============================================================
+   Code folding
+   ============================================================ */
+
+.codemirror-editor-container .cm-foldPlaceholder {
+	background-color: var(--pico-muted-background, #e1e4e8);
+	border: 1px solid var(--pico-muted-border-color, #d1d5da);
+	border-radius: var(--radius-xs);
+	color: var(--pico-muted-color, #6a737d);
+	font-size: 10px;
+	margin: 0 2px;
+	padding: 0 var(--space-xs);
+}
+
+/* ============================================================
+   Search
+   ============================================================ */
+
+.codemirror-editor-container .cm-searchMatch {
+	background-color: rgba(255, 235, 59, 0.5);
+	outline: 1px solid var(--color-warning);
+}
+
+.codemirror-editor-container .cm-searchMatch.cm-searchMatch-selected {
+	background-color: rgba(255, 193, 7, 0.8);
+	outline: 1px solid var(--color-warning);
+}
+
+/* ============================================================
+   Syntax tokens
+   ============================================================ */
+
+.codemirror-editor-container .cm-definitionKeyword {
+	color: var(--cm-color-def-keyword);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-keyword {
+	color: var(--cm-color-keyword);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-comment {
+	color: var(--cm-color-comment);
+	font-style: italic;
+}
+
+.codemirror-editor-container .cm-atom {
+	color: var(--cm-color-atom);
+	font-weight: bold;
+	background-color: var(--cm-color-atom-bg);
+	padding: 1px var(--space-xs);
+	border-radius: var(--radius-xs);
+}
+
+.codemirror-editor-container .cm-propertyName,
+.codemirror-editor-container .cm-property {
+	color: var(--cm-color-property);
+	font-weight: 600;
+}
+
+.codemirror-editor-container .cm-string {
+	color: var(--cm-color-string);
+}
+
+.codemirror-editor-container .cm-number {
+	color: var(--cm-color-number);
+}
+
+.codemirror-editor-container .cm-variableName {
+	color: var(--cm-color-variable);
+}
+
+.codemirror-editor-container .cm-quote,
+.codemirror-editor-container .cm-operator {
+	color: var(--cm-color-operator);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-punctuation,
+.codemirror-editor-container .cm-separator {
+	color: var(--cm-color-punctuation);
+}
+
+.codemirror-editor-container .cm-brace {
+	color: var(--cm-color-brace);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-meta {
+	color: var(--cm-color-meta);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-link {
+	color: var(--cm-color-link);
+	text-decoration: underline;
+}
+
+/* ============================================================
+   LaTeX-specific tokens
+   ============================================================ */
+
+.codemirror-editor-container .cm-ctrlSeq,
+.codemirror-editor-container .cm-ctrlSym {
+	color: var(--cm-color-ctrl);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-beginEnv,
+.codemirror-editor-container .cm-endEnv {
+	color: var(--cm-color-env);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-envName,
+.codemirror-editor-container .cm-documentEnvName,
+.codemirror-editor-container .cm-tabularEnvName,
+.codemirror-editor-container .cm-equationEnvName,
+.codemirror-editor-container .cm-equationArrayEnvName,
+.codemirror-editor-container .cm-verbatimEnvName,
+.codemirror-editor-container .cm-tikzPictureEnvName,
+.codemirror-editor-container .cm-figureEnvName,
+.codemirror-editor-container .cm-listEnvName,
+.codemirror-editor-container .cm-tableEnvName {
+	color: var(--cm-color-env-name);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-mathChar,
+.codemirror-editor-container .cm-mathSpecialChar,
+.codemirror-editor-container .cm-math {
+	color: var(--cm-color-math);
+}
+
+.codemirror-editor-container .cm-string.cm-math {
+	color: var(--cm-color-number);
+	font-style: italic;
+}
+
+.codemirror-editor-container .cm-dollar {
+	color: var(--cm-color-math);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-textArgument,
+.codemirror-editor-container .cm-shortTextArgument,
+.codemirror-editor-container .cm-longArg,
+.codemirror-editor-container .cm-shortArg,
+.codemirror-editor-container .cm-labelArgument,
+.codemirror-editor-container .cm-refArgument,
+.codemirror-editor-container .cm-bibKeyArgument,
+.codemirror-editor-container .cm-packageArgument {
+	color: var(--cm-color-argument);
+}
+
+/* ============================================================
+   Link hover
+   ============================================================ */
+
+.codemirror-editor-container .cm-link-hover {
+	cursor: pointer;
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-decoration-color: var(--primary-color);
+	transition: all 0.2s ease;
+}
+
+.codemirror-editor-container .cm-link-hover:hover {
+	text-decoration-style: solid;
+	background-color: rgba(0, 102, 204, 0.1);
+}
+
+/* ============================================================
+   Tooltips (BibTeX & LaTeX)
+   ============================================================ */
+
+.codemirror-editor-container .cm-bibtex-tooltip,
+.codemirror-editor-container .cm-latex-tooltip {
+	background-color: var(--pico-background);
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-lg);
+	color: var(--pico-color);
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+		Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+	font-size: 12px;
+	line-height: 1.4;
+	max-width: 400px;
+	padding: 12px var(--space-md);
+	z-index: var(--z-tooltip);
+}
+
+.codemirror-editor-container .cm-bibtex-tooltip-description,
+.codemirror-editor-container .cm-latex-tooltip-description {
+	margin-bottom: var(--space-sm);
+	font-weight: 500;
+}
+
+.codemirror-editor-container .cm-bibtex-tooltip-field-name {
+	font-weight: 600;
+	color: var(--cm-color-property);
+	margin-bottom: var(--space-xs);
+}
+
+.codemirror-editor-container .cm-bibtex-tooltip-required {
+	margin-top: var(--space-sm);
+	font-size: 11px;
+	color: var(--color-error);
+}
+
+.codemirror-editor-container .cm-bibtex-tooltip-required::before,
+.codemirror-editor-container .cm-bibtex-tooltip-optional::before {
+	content: "• ";
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-bibtex-tooltip-optional {
+	margin-top: var(--space-xs);
+	font-size: 11px;
+	color: var(--pico-muted-color);
+}
+
+.codemirror-editor-container .cm-bibtex-tooltip-example-label {
+	margin-top: var(--space-sm);
+	margin-bottom: var(--space-xs);
+	font-weight: 500;
+	font-size: 11px;
+	color: var(--pico-muted-color);
+}
+
+.codemirror-editor-container .cm-bibtex-tooltip-example,
+.codemirror-editor-container .cm-latex-tooltip-syntax,
+.codemirror-editor-container .cm-latex-tooltip-example,
+.codemirror-editor-container .cm-latex-tooltip-package {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: 10px;
+	background-color: var(--pico-muted-background);
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--radius-xs);
+	padding: 6px var(--space-sm);
+	margin: var(--space-xs) 0 0 0;
+	white-space: pre-wrap;
+	color: var(--pico-color);
+}
+
+.codemirror-editor-container .cm-bibtex-tooltip-note {
+	margin-top: 6px;
+	font-size: 11px;
+	color: var(--pico-muted-color);
+	font-style: italic;
+}
+
+/* ============================================================
+   Diagnostics
+   ============================================================ */
+
+.codemirror-editor-container .cm-diagnostic {
+	background-color: var(--pico-background);
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-lg);
+	color: var(--pico-color);
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+		Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+	font-size: 12px;
+	line-height: 1.4;
+	padding: 12px var(--space-md);
+	z-index: var(--z-tooltip);
+}
+
+.codemirror-editor-container .cm-diagnostic-error {
+	border-left: 4px solid var(--color-error);
+}
+
+.codemirror-editor-container .cm-diagnostic-error::before {
+	content: "⚠️ Error: ";
+	color: var(--color-error);
+	font-weight: 600;
+}
+
+.codemirror-editor-container .cm-diagnostic-warning {
+	border-left: 4px solid var(--color-warning);
+}
+
+.codemirror-editor-container .cm-diagnostic-warning::before {
+	content: "⚠️ Warning: ";
+	color: var(--color-warning);
+	font-weight: 600;
+}
+
+.codemirror-editor-container .cm-diagnostic-info {
+	border-left: 4px solid var(--color-info);
+}
+
+.codemirror-editor-container .cm-diagnostic-info::before {
+	content: "ℹ️ Info: ";
+	color: var(--color-info);
+	font-weight: 600;
+}
+
+/* ============================================================
+   Autocomplete
+   ============================================================ */
+.cm-tooltip {
+	min-width: min-content;
+	border: 2px solid var(--pico-muted-border-color) !important;
+	border-radius: var(--radius-sm);
+	padding: var(--space-sm) !important;
+	background-color: var(--pico-secondary-background) !important;
+}
+
+.codemirror-editor-container .cm-tooltip.cm-tooltip-autocomplete > ul {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: 12px;
+	background-color: var(--pico-background);
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--radius-sm);
+}
+
+.codemirror-editor-container .cm-completionIcon-keyword::after {
+	content: "@";
+	color: var(--color-error);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-completionIcon-property::after {
+	content: "F";
+	color: var(--cm-color-property);
+	font-weight: bold;
+}
+
+.codemirror-editor-container .cm-completionIcon-constant::after {
+	content: "C";
+	color: var(--cm-color-number);
+	font-weight: bold;
+}
+
+/* ============================================================
+   Yjs collaboration cursors
+   ============================================================ */
+
+.codemirror-editor-container .cm-ySelection {
+	background-color: rgba(250, 129, 0, 0.5);
+}
+
+.codemirror-editor-container .cm-ySelectionCaret {
+	position: relative;
+	border-left: 1px solid black;
+	border-right: 1px solid black;
+	margin-left: -1px;
+	margin-right: -1px;
+}
+
+.codemirror-editor-container .cm-ySelectionInfo {
+	position: absolute;
+	top: -1.3em;
+	left: 0;
+	z-index: 100;
+	padding: 2px 6px;
+	width: max-content;
+	border-radius: var(--radius-sm);
+	font-size: 0.8em;
+	white-space: nowrap;
+	font-family: sans-serif;
+	color: #fff;
+	transition: opacity var(--transition-slow) ease-in-out;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.codemirror-editor-container .cm-ySelectionCaretDot {
+	transition: transform var(--transition-slow) ease-in-out;
+	transform: scale(1);
+}
+
+.codemirror-editor-container .cm-ySelectionCaret:hover .cm-ySelectionInfo {
+	opacity: 1;
+}
+
+.codemirror-editor-container .cm-ySelectionCaret:hover .cm-ySelectionCaretDot {
+	transform: scale(0);
+}
+
+/* ============================================================
+   Comments
+   ============================================================ */
+
+.codemirror-editor-container .cm-comment-content {
+	background-color: var(--comment-highlight-bg, rgba(255, 220, 100, 0.2));
+	border-radius: var(--radius-xs);
+	padding: 0 2px;
+	position: relative;
+}
+
+.codemirror-editor-container .cm-comment-content:hover {
+	background-color: var(--comment-highlight-hover-bg, rgba(255, 220, 100, 0.3));
+}
+
+.codemirror-editor-container .cm-comment-content::after {
+	content: "💬";
+	font-size: 0.8em;
+	position: absolute;
+	top: -0.8em;
+	right: 0;
+	opacity: 0;
+	cursor: pointer;
+	transition: opacity var(--transition-normal);
+}
+
+.codemirror-editor-container .cm-comment-content:hover::after {
+	opacity: 0.7;
+}
+
+.codemirror-editor-container .comment-selection-active {
+	background-color: var(
+		--comment-highlight-active-bg,
+		rgba(100, 200, 255, 0.2)
+	);
+	border-radius: var(--radius-xs);
+}
+
+@keyframes comment-pulse {
+	0%,
+	100% {
+		background-color: rgba(255, 220, 100, 0.2);
+	}
+
+	50% {
+		background-color: rgba(255, 220, 100, 0.4);
+	}
+}
+
+.codemirror-editor-container .cm-comment-content.new-comment {
+	animation: comment-pulse 2s ease-in-out 3;
+}
+
+/* Hidden comment markers and tags */
+.codemirror-editor-container .cm-comment-marker,
+.codemirror-editor-container .comment-open-tag,
+.codemirror-editor-container .comment-close-tag {
+	display: none !important;
+	opacity: 0 !important;
+	width: 0 !important;
+	height: 0 !important;
+	overflow: hidden !important;
+	position: absolute !important;
+	visibility: hidden !important;
+	pointer-events: none !important;
+	font-size: 0 !important;
+	line-height: 0 !important;
+	margin: 0 !important;
+	padding: 0 !important;
+	border: none !important;
+}
+
+/* ============================================================
+   Conflicts view gutter
+   ============================================================ */
+
+.cm-conflict-gutter {
+	width: 1.4rem;
+}
+
+.cm-conflict-copy-btn {
+	all: unset;
+	cursor: pointer;
+	font-size: 0.7rem;
+	color: var(--pico-primary);
+	opacity: 0.6;
+	line-height: 1;
+	padding: 0 2px;
+	transition: opacity var(--transition-normal);
+}
+
+.cm-conflict-copy-btn:hover {
+	opacity: 1;
+}
+
+.merge-editor-container .cm-mergeView {
+	height: auto;
+}
+
+.merge-editor-container .cm-mergeViewEditors {
+	height: 100%;
+}
+
+/* ============================================================
+   Code actions tooltip
+   ============================================================ */
+
+.cm-code-actions-tooltip {
+	background-color: var(--pico-background);
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-lg);
+	color: var(--pico-color);
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+		Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+	font-size: 12px;
+	line-height: 1.4;
+	max-width: 400px;
+	padding: var(--space-sm);
+	z-index: var(--z-tooltip);
+}
+
+.cm-code-actions-source,
+.cm-tooltip-hover-source {
+	color: var(--pico-muted-color);
+	font-size: 11px;
+	font-weight: 600;
+	padding: var(--space-xs) var(--space-sm);
+	margin-bottom: var(--space-sm);
+	display: inline-flex;
+	align-items: center;
+	width: fit-content;
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--radius-lg);
+	background-color: var(--pico-background);
+}
+
+.cm-tooltip-section {
+	width: fit-content;
+	overflow-y: auto;
+	max-height: 600px;
+	max-width: 800px;
+	font-size: small;
+}
+
+.cm-tooltip-section pre {
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--radius-sm);
+}
+
+.cm-tooltip-section pre code {
+	background-color: var(--pico-background);
+}
+
+.cm-tooltip-section .cm-lsp-markdown h1 {
+	font-size: 1.4em;
+}
+
+.cm-tooltip-section .cm-lsp-markdown h2 {
+	font-size: 1.25em;
+}
+
+.cm-tooltip-section .cm-lsp-markdown h3 {
+	font-size: 1.1em;
+}
+
+.cm-tooltip-section .cm-lsp-markdown h4 {
+	font-size: 1em;
+}
+
+.cm-tooltip-section .cm-lsp-markdown h5 {
+	font-size: 0.9em;
+}
+
+.cm-tooltip-section .cm-lsp-markdown h6 {
+	font-size: 0.85em;
+}
+
+.cm-tooltip-section .cm-lsp-markdown :is(h1, h2, h3, h4, h5, h6) {
+	margin: 0.4em 0 0.2em;
+	font-weight: 600;
+	line-height: 1.2;
+}
+
+.cm-tooltip-section .cm-lsp-markdown hr {
+	border: none;
+	border-top: 1px solid currentColor;
+	opacity: 0.3;
+	margin: 0.5em 0;
+}
+
+.cm-code-actions-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-xs);
+	padding: var(--space-xs) var(--space-sm);
+}
+
+.cm-code-action-button {
+	background-color: var(--pico-background);
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--radius-xs);
+	color: var(--pico-color);
+	cursor: pointer;
+	font-size: 12px;
+	line-height: 1.4;
+	padding: 3px var(--space-sm);
+	white-space: nowrap;
+}
+
+.cm-code-action-button:hover {
+	background-color: var(--pico-secondary-background);
+	border-color: var(--pico-muted-color);
+}
+
+/* ============================================================
+   Math preview & editor overlays
+   ============================================================ */
+
+math-field {
+	font-family: inherit;
+}
+
+.cm-math-preview-overlay {
+	position: fixed;
+	background-color: var(--pico-background);
+	border: 1px solid var(--accent-border);
+	border-radius: var(--radius-sm);
+	padding: 0 var(--space-md);
+	box-shadow: var(--shadow-md);
+	min-width: 50px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	pointer-events: auto;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.cm-math-preview-overlay:hover {
+	transform: scale(1.02);
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.cm-math-preview-field {
+	background: var(--pico-background);
+	color: var(--pico-color);
+	border: none;
+	padding: var(--space-xs);
+	margin: 0;
+	font-size: inherit;
+	pointer-events: none;
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.cm-math-edit-btn {
+	position: absolute;
+	top: 1px;
+	left: 1px;
+	width: 16px;
+	height: 16px;
+	padding: calc(var(--space-sm) * 1.3);
+	border: none;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.2s;
+	z-index: 1;
+}
+
+.cm-math-preview-overlay:hover .cm-math-edit-btn {
+	opacity: 0.8;
+}
+
+.cm-math-edit-btn:hover {
+	transform: scale(1.1);
+}
+
+.cm-math-edit-btn svg {
+	flex: 0 0 auto;
+	display: block;
+	stroke: var(--pico-secondary);
+}
+
+.cm-math-editor-overlay {
+	position: fixed;
+	z-index: var(--z-above-all);
+	background: var(--pico-secondary-background);
+	border: 2px solid var(--pico-primary-background);
+	border-radius: 8px;
+	padding: 15px;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+	min-width: 50px;
+	max-width: calc(100vw - 32px);
+	pointer-events: auto;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	max-height: 80%;
+	overflow-y: auto;
+}
+
+.cm-math-editor-field {
+	display: block;
+	max-width: 100%;
+	padding: 8px;
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: 4px;
+	background: var(--pico-background);
+	color: var(--pico-color);
+	overflow-y: visible;
+	--ui-menu-bg: var(--pico-secondary-background) !important;
+	--ui-menu-text: var(--pico-color);
+	--ui-menu-bg-hover: var(--pico-primary-background) !important;
+	--ui-menu-bg-active: var(--pico-primary-background) !important;
+	--ui-menu-bg-active-muted: var(--pico-primary-background) !important;
+	--ui-menu-z-index: var(--z-above-all) !important;
+}
+
+.cm-math-editor-buttons {
+	margin-top: var(--space-md);
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-sm);
+}
+
+.cm-math-editor-btn {
+	padding: 8px 16px;
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 12px;
+	font-weight: 500;
+	transition: all 0.2s ease;
+}
+
+.cm-math-editor-btn-save:hover,
+.cm-math-editor-btn-cancel:hover {
+	transform: translateY(-1px);
+}
+
+.cm-math-editor-btn:active {
+	transform: translateY(0);
+}
+
+/* ============================================================
+   MathLive keyboard
+   ============================================================ */
+
+.ML__keyboard {
+	z-index: var(--z-above-all) !important;
+
+	--keyboard-accent-color: var(--pico-primary);
+	--keyboard-background: var(--pico-secondary-background);
+	--keyboard-border: var(--pico-muted-border-color);
+	--keyboard-shadow: var(--pico-box-shadow);
+	--keyboard-text: var(--pico-color);
+
+	--keyboard-toolbar-background: var(--pico-secondary-background);
+	--keyboard-toolbar-border: var(--pico-muted-border-color);
+	--keyboard-toolbar-text: var(--pico-secondary);
+	--keyboard-toolbar-text-active: var(--pico-primary-background);
+	--keyboard-toolbar-icon: var(--pico-color);
+	--keyboard-toolbar-icon-active: var(--pico-primary-background);
+
+	--keycap-background: var(--pico-background);
+	--keycap-background-hover: var(--pico-secondary-background-hover);
+	--keycap-background-active: var(--pico-secondary-background);
+	--keycap-border: var(--pico-muted-border-color);
+	--keycap-text: var(--pico-color);
+	--keycap-text-hover: var(--pico-secondary);
+	--keycap-text-active: var(--pico-background);
+
+	--keycap-secondary-background: var(--pico-secondary-background);
+	--keycap-secondary-text: var(--pico-color);
+
+	--keycap-action-background: var(--pico-primary-background);
+	--keycap-action-background-hover: var(--pico-primary-hover-background);
+	--keycap-action-background-active: var(--pico-primary-focus);
+	--keycap-action-text: var(--pico-primary-inverse);
+
+	--keyboard-disabled-background: var(--pico-muted-background);
+	--keyboard-disabled-text: var(--pico-muted-color);
+	--keycap-disabled-background: var(--pico-muted-background);
+	--keycap-disabled-text: var(--pico-muted-color);
+}
+
+.ML__keyboard [data-tooltip]::after {
+	visibility: hidden !important;
+}
+
+.ML__keyboard [data-tooltip]::before {
+	background-color: var(--pico-secondary-background);
+	color: var(--pico-color);
+}
+
+/* ============================================================
+   Detypify panel
+   ============================================================ */
+
+.cm-symbol-search-panel {
+	margin: var(--space-sm);
+}
+
+.cm-symbol-search-input {
+	background-color: var(--pico-background);
+	border: 1px solid var(--accent-border);
+	border-radius: var(--radius-sm);
+	color: var(--text-color);
+}
+
+.cm-symbol-body {
+	display: flex;
+	gap: var(--space-md);
+	align-items: flex-start;
+}
+
+.cm-symbol-draw-area {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+
+.cm-symbol-canvas {
+	border: 1px solid var(--border-color, #ccc);
+	border-radius: 4px;
+	cursor: crosshair;
+	background-color: var(--pico-secondary);
+}
+
+.cm-symbol-results {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-content: flex-start;
+	flex: 1;
+	min-height: 200px;
+}
+
+.cm-symbol-result-label {
+	border: 1px solid var(--cm-color-atom);
+}
+
+/* ============================================================
+   Loading state
+   ============================================================ */
+
+.loading-state {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	height: 100%;
+	color: var(--pico-secondary);
+}

@@ -1,0 +1,883 @@
+// src/components/app/EditorApp.tsx
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { t } from '@/i18n';
+import texlyreLogo from '../../assets/images/TeXlyre_notext.png';
+import { ChatProvider } from '../../contexts/ChatContext';
+import { CollabProvider } from '../../contexts/CollabContext';
+import { FileSyncProvider } from '../../contexts/FileSyncContext';
+import { FileTreeProvider } from '../../contexts/FileTreeContext';
+import { LaTeXProvider } from '../../contexts/LaTeXContext';
+import { TypstProvider } from '../../contexts/TypstContext';
+import { ExternalCompilerProvider } from '../../contexts/ExternalCompilerContext';
+import { SourceMapProvider } from '../../contexts/SourceMapContext';
+import { ContentFormatterProvider } from '../../contexts/ContentFormatterContext';
+import { useAuth } from '../../hooks/useAuth';
+import { useLaTeX } from '../../hooks/useLaTeX';
+import { useTypst } from '../../hooks/useTypst';
+import { useCollab } from '../../hooks/useCollab';
+import { useGlobalKeyboard } from '../../hooks/useGlobalKeyboard';
+import { useFileSystemBackup } from '../../hooks/useFileSystemBackup';
+import { useOffline } from '../../hooks/useOffline';
+import { fileStorageService } from '../../services/FileStorageService';
+import { compilerRegistryService } from '../../services/CompilerRegistryService';
+import { popoutViewerService } from '../../services/PopoutViewerService';
+import type { DocumentList } from '../../types/documents';
+import type { YjsDocUrl } from '../../types/yjs';
+import type { TypstOutputFormat } from '../../types/typst';
+import type { LaTeXEngine } from '../../types/latex';
+import type { ProjectType, ProjectGroup } from '../../types/projects';
+import BackupModal from '../backup/BackupModal';
+import BackupStatusIndicator from '../backup/BackupStatusIndicator';
+import ChatPanel from '../chat/ChatPanel';
+import { AIChatProvider } from '../../contexts/AIChatContext';
+import AIChatPanel from '../ai/AIChatPanel';
+import CollabStatusIndicator from '../collab/CollabStatusIndicator';
+import { EditIcon, ProjectsIcon } from '../common/Icons';
+import Modal from '../common/Modal';
+import OfflineBanner from '../common/OfflineBanner';
+import ToastContainer from '../common/ToastContainer';
+import TypesetterInfo from '../common/TypesetterInfo';
+import FileDocumentController from '../editor/FileDocumentController';
+import LaTeXCompileButton from '../output/LaTeXCompileButton';
+import LaTeXExportButton from '../output/LaTeXExportButton';
+import TypstCompileButton from '../output/TypstCompileButton';
+import TypstExportButton from '../output/TypstExportButton';
+import ExternalCompileButton from '../output/ExternalCompileButton';
+import ExternalExportButton from '../output/ExternalExportButton';
+import ExportAccountModal from '../profile/ExportAccountModal';
+import DeleteAccountModal from '../profile/DeleteAccountModal';
+import ProfileSettingsModal from '../profile/ProfileSettingsModal';
+import UserDropdown from '../profile/UserDropdown';
+import ProjectForm from '../project/ProjectForm';
+import ShareProjectButton from '../project/ShareProjectButton';
+import ShareProjectModal from '../project/ShareProjectModal';
+import SettingsButton from '../settings/SettingsButton';
+import KeyboardShortcutsModal from '../common/KeyboardShortcutsModal';
+import PrivacyModal from '../common/PrivacyModal';
+import GuestUpgradeBanner from '../auth/GuestUpgradeBanner';
+import GuestUpgradeModal from '../auth/GuestUpgradeModal';
+import { isValidYjsUrl, pushHash } from '../../utils/urlUtils';
+import { clickWhenReady } from '../../utils/editorNavigator';
+import { createNamedLogger } from '@/logging';
+
+const moduleLog = createNamedLogger('EditorApp');
+
+interface EditorAppProps {
+	docUrl: YjsDocUrl;
+	onBackToProjects: () => void;
+	onLogout: () => void;
+	targetDocId?: string | null;
+	targetFilePath?: string | null;
+}
+
+const EditorAppView: React.FC<EditorAppProps> = ({
+	docUrl,
+	onBackToProjects,
+	onLogout,
+	targetDocId,
+	targetFilePath,
+}) => {
+	const {
+		data: doc,
+		changeData: changeDoc,
+		isConnected,
+	} = useCollab<DocumentList>();
+	const hasDoc = !!doc;
+
+	const { user, updateProject, getProjectById, isGuestUser } = useAuth();
+	const {
+		status,
+		activities,
+		requestAccess,
+		synchronize,
+		importChanges,
+		disconnect,
+		clearActivity,
+		clearAllActivities,
+		changeDirectory,
+	} = useFileSystemBackup();
+	const [showProfileModal, setShowProfileModal] = useState(false);
+	const [showAccountExportModal, setShowAccountExportModal] = useState(false);
+	const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] =
+		useState(false);
+	const [showAutoBackupModal, setShowAutoBackupModal] = useState(false);
+	const [showShareModal, setShowShareModal] = useState(false);
+	const [showGuestUpgradeModal, setShowGuestUpgradeModal] = useState(false);
+	const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [localDocId, setLocalDocId] = useState<string>('');
+	const [linkedFileInfo, setLinkedFileInfo] = useState<{
+		fileName?: string;
+		filePath?: string;
+		fileId?: string;
+	} | null>(null);
+	const lastSyncedMetadata = useRef({
+		name: '',
+		description: '',
+		type: 'latex' as ProjectType,
+		compilerId: undefined as string | undefined,
+		mainFile: undefined as string | undefined,
+		latexEngine: undefined as LaTeXEngine | undefined,
+		typstEngine: undefined as string | undefined,
+		typstOutputFormat: undefined as TypstOutputFormat | undefined,
+	});
+	const { isCompiling, triggerAutoCompile } = useLaTeX();
+	const {
+		isCompiling: isTypstCompiling,
+		triggerAutoCompile: triggerTypstAutoCompile,
+	} = useTypst();
+	const { isOfflineMode, hideOfflineBanner } = useOffline();
+	const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+	const [showPrivacy, setShowPrivacy] = useState(false);
+
+	const shareUrl = `${window.location.origin}${window.location.pathname}#${docUrl}`;
+	const selectedDocument = doc?.documents?.find((d) => d.id === localDocId);
+	const projectName = doc?.projectMetadata?.name || 'Untitled Project';
+	const projectDescription = doc?.projectMetadata?.description || '';
+
+	const projectType = doc?.projectMetadata?.type || 'latex';
+	const projectTypeKnown = doc?.projectMetadata?.type !== undefined;
+	const projectCompilerId = doc?.projectMetadata?.compilerId;
+	const activeCompilerProvider = compilerRegistryService.resolve(
+		projectType,
+		projectCompilerId,
+	);
+
+	useGlobalKeyboard();
+
+	const updateContent = (docId: string, content: string) => {
+		changeDoc((d) => {
+			if (d.documents) {
+				const docIndex = d.documents.findIndex((doc) => doc.id === docId);
+				if (docIndex !== -1) {
+					d.documents[docIndex].content = content;
+				}
+			}
+		});
+	};
+	const handleAccountDeleted = async () => {
+		setIsDeleteAccountModalOpen(false);
+		await onLogout();
+	};
+
+	const handleGuestUpgradeSuccess = () => {
+		setShowGuestUpgradeModal(false);
+	};
+
+	const handleCreateDocument = () => {
+		changeDoc((d) => {
+			if (!d.documents) {
+				d.documents = [];
+			}
+			const newDocId = Math.random().toString(36).substring(2, 15);
+			const newDocName = `Document ${d.documents.length + 1}`;
+			d.documents.push({
+				id: newDocId,
+				name: newDocName,
+				content: '',
+			});
+			d.currentDocId = newDocId;
+		});
+		if (doc?.documents) {
+			setLocalDocId(doc.documents[doc.documents.length - 1].id);
+		}
+	};
+
+	const handleSelectDocument = useCallback((docId: string) => {
+		setLocalDocId(docId);
+	}, []);
+
+	const handleUpdateContent = (content: string) => {
+		updateContent(localDocId, content);
+	};
+
+	const handleRenameDocument = (docId: string, newName: string) => {
+		changeDoc((d) => {
+			if (d.documents) {
+				const docIndex = d.documents.findIndex((doc) => doc.id === docId);
+				if (docIndex !== -1) {
+					d.documents[docIndex].name = newName;
+				}
+			}
+		});
+	};
+
+	const handleUpdateProjectMetadata = (projectData: {
+		name: string;
+		description: string;
+		type?: ProjectType;
+		group?: ProjectGroup;
+		compilerId?: string;
+	}) => {
+		setIsSubmitting(true);
+		changeDoc((d) => {
+			if (!d.projectMetadata) {
+				d.projectMetadata = {
+					name: projectData.name,
+					description: projectData.description,
+					type: projectData.type || 'latex',
+					group: projectData.group,
+					compilerId: projectData.compilerId,
+				};
+			} else {
+				d.projectMetadata.name = projectData.name;
+				d.projectMetadata.description = projectData.description;
+				d.projectMetadata.type = projectData.type || 'latex';
+				d.projectMetadata.group = projectData.group;
+				d.projectMetadata.compilerId = projectData.compilerId;
+			}
+		});
+		setIsSubmitting(false);
+		setIsEditingMetadata(false);
+	};
+
+	const handleNavigateToLinkedFile = () => {
+		if (linkedFileInfo?.filePath) {
+			document.dispatchEvent(
+				new CustomEvent('navigate-to-linked-file', {
+					detail: {
+						filePath: linkedFileInfo.filePath,
+						fileId: linkedFileInfo.fileId,
+					},
+				}),
+			);
+		}
+	};
+
+	const handleExpandLatexOutput = () => {
+		if (!popoutViewerService.isWindowOpen()) {
+			document.dispatchEvent(new CustomEvent('expand-latex-output'));
+		}
+	};
+
+	const handleExpandTypstOutput = () => {
+		if (!popoutViewerService.isWindowOpen()) {
+			document.dispatchEvent(new CustomEvent('expand-typst-output'));
+		}
+	};
+
+	const handleExpandExternalOutput = () => {
+		if (!popoutViewerService.isWindowOpen()) {
+			document.dispatchEvent(new CustomEvent('expand-external-output'));
+		}
+	};
+
+	useEffect(() => {
+		const handleCompile = () => {
+			if (isCompiling || isTypstCompiling) return;
+
+			const buttonSelectors =
+				projectType === 'typst'
+					? [
+							'.header-typst-compile-button .compile-button',
+							'.header-compile-button .compile-button',
+						]
+					: [
+							'.header-compile-button .compile-button',
+							'.header-typst-compile-button .compile-button',
+						];
+
+			clickWhenReady(buttonSelectors);
+		};
+
+		const handleCompileClean = () => {
+			if (isCompiling || isTypstCompiling) return;
+
+			const containerSelectors =
+				projectType === 'typst'
+					? ['.header-typst-compile-button', '.header-compile-button']
+					: ['.header-compile-button', '.header-typst-compile-button'];
+
+			for (const selector of containerSelectors) {
+				const container = document.querySelector(selector) as any;
+				if (container && container.clearAndCompile) {
+					container.clearAndCompile();
+					return;
+				}
+			}
+		};
+
+		const handleStopCompilation = () => {
+			if (isCompiling) {
+				const latexCompileButton = document.querySelector(
+					'.header-compile-button .compile-button',
+				) as HTMLButtonElement;
+				if (latexCompileButton) {
+					latexCompileButton.click();
+				}
+			}
+
+			if (isTypstCompiling) {
+				const typstCompileButton = document.querySelector(
+					'.header-typst-compile-button .compile-button',
+				) as HTMLButtonElement;
+				if (typstCompileButton) {
+					typstCompileButton.click();
+				}
+			}
+		};
+
+		const handleTypstCompile = () => {
+			if (isTypstCompiling) return;
+
+			clickWhenReady(['.header-typst-compile-button .compile-button']);
+		};
+
+		document.addEventListener('trigger-compile', handleCompile);
+		document.addEventListener('trigger-compile-clean', handleCompileClean);
+		document.addEventListener(
+			'trigger-stop-compilation',
+			handleStopCompilation,
+		);
+		document.addEventListener('trigger-typst-compile', handleTypstCompile);
+
+		return () => {
+			document.removeEventListener('trigger-compile', handleCompile);
+			document.removeEventListener('trigger-compile-clean', handleCompileClean);
+			document.removeEventListener(
+				'trigger-stop-compilation',
+				handleStopCompilation,
+			);
+			document.removeEventListener('trigger-typst-compile', handleTypstCompile);
+		};
+	}, [isCompiling, isTypstCompiling, projectType]);
+
+	useEffect(() => {
+		if (!hasDoc) return;
+
+		const timer = setTimeout(() => {
+			triggerAutoCompile();
+			triggerTypstAutoCompile();
+		}, 1000);
+
+		return () => clearTimeout(timer);
+	}, [hasDoc, triggerAutoCompile, triggerTypstAutoCompile]);
+
+	useEffect(() => {
+		if (doc) {
+			const projectMetadata = sessionStorage.getItem('projectMetadata');
+			if (projectMetadata) {
+				const parsedMetadata = JSON.parse(projectMetadata);
+				changeDoc((d) => {
+					d.projectMetadata = {
+						name: parsedMetadata.name || 'Untitled Project',
+						description: parsedMetadata.description || '',
+						type: parsedMetadata.type || 'latex',
+						compilerId: parsedMetadata.compilerId,
+						mainFile: parsedMetadata.mainFile,
+						latexEngine: parsedMetadata.latexEngine,
+						typstEngine: parsedMetadata.typstEngine,
+						typstOutputFormat: parsedMetadata.typstOutputFormat,
+					};
+					sessionStorage.removeItem('projectMetadata');
+				});
+			}
+		}
+	}, [doc, changeDoc]);
+
+	useEffect(() => {
+		if (doc?.projectMetadata) {
+			const {
+				name,
+				description,
+				type,
+				compilerId,
+				mainFile,
+				latexEngine,
+				typstEngine,
+				typstOutputFormat,
+			} = doc.projectMetadata;
+			const projectId = sessionStorage.getItem('currentProjectId');
+
+			if (
+				name &&
+				name !== 'Untitled Project' &&
+				name !== 'Shared Project' &&
+				projectId
+			) {
+				if (
+					lastSyncedMetadata.current.name !== name ||
+					lastSyncedMetadata.current.description !== description ||
+					lastSyncedMetadata.current.type !== type ||
+					lastSyncedMetadata.current.compilerId !== compilerId ||
+					lastSyncedMetadata.current.mainFile !== mainFile ||
+					lastSyncedMetadata.current.latexEngine !== latexEngine ||
+					lastSyncedMetadata.current.typstEngine !== typstEngine ||
+					lastSyncedMetadata.current.typstOutputFormat !== typstOutputFormat
+				) {
+					lastSyncedMetadata.current = {
+						name,
+						description: description || '',
+						type: type || 'latex',
+						compilerId,
+						mainFile,
+						latexEngine,
+						typstEngine,
+						typstOutputFormat,
+					};
+					const syncProjectMetadata = async () => {
+						try {
+							const project = await getProjectById(projectId);
+							if (project) {
+								await updateProject({
+									...project,
+									name,
+									description: description || '',
+									type: type || 'latex',
+									compilerId,
+								});
+								document.dispatchEvent(
+									new CustomEvent('project-metadata-updated'),
+								);
+							}
+						} catch (error) {
+							moduleLog.error('Failed to sync project metadata:', error);
+						}
+					};
+					syncProjectMetadata();
+				}
+			}
+		}
+	}, [doc?.projectMetadata, updateProject, getProjectById]);
+
+	useEffect(() => {
+		if (targetDocId) return;
+		if (targetFilePath) return;
+		if (doc?.currentDocId === undefined) return;
+
+		setLocalDocId(doc.currentDocId);
+	}, [doc?.currentDocId, targetDocId, targetFilePath]);
+
+	useEffect(() => {
+		if (!doc?.documents) return;
+		if (!targetDocId) return;
+
+		const targetDoc = doc.documents.find((d) => d.id === targetDocId);
+		if (targetDoc) {
+			handleSelectDocument(targetDocId);
+		}
+	}, [doc, targetDocId, handleSelectDocument]);
+
+	useEffect(() => {
+		const checkLinkedFile = async () => {
+			if (localDocId && doc?.documents) {
+				try {
+					const allFiles = await fileStorageService.getAllFiles(
+						false,
+						false,
+						false,
+					);
+					const linkedFile = allFiles.find(
+						(file) => file.documentId === localDocId,
+					);
+
+					if (linkedFile) {
+						setLinkedFileInfo({
+							fileName: linkedFile.name,
+							filePath: linkedFile.path,
+							fileId: linkedFile.id,
+						});
+					} else {
+						setLinkedFileInfo(null);
+					}
+				} catch (error) {
+					moduleLog.error('Error checking for linked file:', error);
+					setLinkedFileInfo(null);
+				}
+			} else {
+				setLinkedFileInfo(null);
+			}
+		};
+
+		checkLinkedFile();
+	}, [localDocId, doc?.documents]);
+
+	const CompileButtons = () => {
+		if (!projectTypeKnown) return null;
+
+		const latexButtons = [
+			<LaTeXCompileButton
+				key='latex'
+				dropdownKey={'latex-header-dropdown'}
+				className='header-compile-button'
+				selectedDocId={localDocId}
+				documents={doc?.documents}
+				onNavigateToLinkedFile={handleNavigateToLinkedFile}
+				onExpandLatexOutput={handleExpandLatexOutput}
+				linkedFileInfo={linkedFileInfo}
+				shouldNavigateOnCompile={true}
+				useSharedSettings={true}
+			/>,
+
+			<LaTeXExportButton
+				key='latex-export'
+				className='output-export-button'
+				selectedDocId={localDocId}
+				documents={doc?.documents}
+				linkedFileInfo={linkedFileInfo}
+				useSharedSettings={true}
+			/>,
+		];
+
+		const typstButtons = [
+			<TypstCompileButton
+				key='typst'
+				dropdownKey={'typst-header-dropdown'}
+				className='header-typst-compile-button'
+				selectedDocId={localDocId}
+				documents={doc?.documents}
+				onNavigateToLinkedFile={handleNavigateToLinkedFile}
+				onExpandTypstOutput={handleExpandTypstOutput}
+				linkedFileInfo={linkedFileInfo}
+				shouldNavigateOnCompile={true}
+				useSharedSettings={true}
+			/>,
+
+			<TypstExportButton
+				key='typst-export'
+				className='output-export-button'
+				selectedDocId={localDocId}
+				documents={doc?.documents}
+				linkedFileInfo={linkedFileInfo}
+				useSharedSettings={true}
+			/>,
+		];
+
+		if (activeCompilerProvider?.source === 'chelys') {
+			return (
+				<>
+					<ExternalCompileButton
+						provider={activeCompilerProvider}
+						className='header-compile-button'
+						onExpandExternalOutput={handleExpandExternalOutput}
+						linkedFileInfo={linkedFileInfo}
+						useSharedSettings={true}
+					/>
+					<ExternalExportButton
+						provider={activeCompilerProvider}
+						className='output-export-button'
+						linkedFileInfo={linkedFileInfo}
+					/>
+				</>
+			);
+		}
+
+		if (projectType === 'typst') {
+			return (
+				<>
+					{typstButtons[0]}
+					{typstButtons[1]}
+				</>
+			);
+		}
+
+		if (projectType === 'latex') {
+			return (
+				<>
+					{latexButtons[0]}
+					{latexButtons[1]}
+				</>
+			);
+		}
+
+		return null;
+	};
+
+	if (!isConnected && !doc) {
+		return (
+			<div className='app-container'>
+				<div className='loading-container'>
+					<div className='loading-spinner' />
+					<p>{t('Connecting to project...')}</p>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className='app-container'>
+			{isOfflineMode && !hideOfflineBanner && <OfflineBanner />}
+			{isGuestUser(user) && (
+				<GuestUpgradeBanner
+					onOpenUpgradeModal={() => setShowGuestUpgradeModal(true)}
+				/>
+			)}
+			<header>
+				<div className='header-left'>
+					<button className='back-button' onClick={onBackToProjects}>
+						<ProjectsIcon />
+						{t('Projects')}
+					</button>
+				</div>
+				<div className='header-center'>
+					<div
+						className='project-title-container'
+						onClick={() => setIsEditingMetadata(true)}
+					>
+						<div className='project-title-header'>
+							<h3 className='project-title'>{projectName}</h3>
+							<button
+								className='edit-title-button'
+								title={t('Edit Project Details')}
+								onClick={(e) => {
+									e.stopPropagation();
+									setIsEditingMetadata(true);
+								}}
+							>
+								<EditIcon />
+							</button>
+						</div>
+					</div>
+					{projectDescription && (
+						<div className='project-description'>
+							<p>{projectDescription}</p>
+						</div>
+					)}
+				</div>
+				<div className='header-right'>
+					<CompileButtons />
+
+					<ShareProjectButton
+						className='header-share-button'
+						onOpenShareModal={() => setShowShareModal(true)}
+					/>
+
+					{!isGuestUser(user) && (
+						<BackupStatusIndicator
+							className='header-backup-indicator'
+							currentProjectId={sessionStorage.getItem('currentProjectId')}
+							isInEditor={true}
+						/>
+					)}
+					{!isOfflineMode && (
+						<CollabStatusIndicator
+							className='header-collab-status'
+							docUrl={docUrl}
+						/>
+					)}
+					<SettingsButton className='header-settings-button' />
+					<UserDropdown
+						username={user?.username || ''}
+						onLogout={onLogout}
+						onOpenProfile={() => setShowProfileModal(true)}
+						onOpenExport={() => setShowAccountExportModal(true)}
+						onOpenDeleteAccount={() => setIsDeleteAccountModalOpen(true)}
+						onOpenUpgrade={() => setShowGuestUpgradeModal(true)}
+						isGuest={isGuestUser(user)}
+					/>
+				</div>
+			</header>
+
+			{doc?.documents && (
+				<FileDocumentController
+					documents={doc?.documents || []}
+					selectedDocId={localDocId}
+					onSelectDocument={handleSelectDocument}
+					onCreateDocument={handleCreateDocument}
+					onRenameDocument={handleRenameDocument}
+					onUpdateContent={handleUpdateContent}
+					content={selectedDocument?.content || ''}
+					docUrl={docUrl}
+					targetDocId={targetDocId}
+					targetFilePath={targetFilePath}
+				/>
+			)}
+
+			<footer>
+				<div className='project-type-badge'>
+					{t('Typesetter: ')}{' '}
+					<TypesetterInfo
+						type={projectType}
+						provider={activeCompilerProvider}
+					/>
+				</div>
+
+				<p className='texlyre-info'>
+					<span className='footer-links'>
+						<button
+							type='button'
+							onClick={() => setShowKeyboardShortcuts(true)}
+							className='shortcuts-link'
+						>
+							{t('Keyboard Map')}
+						</button>{' '}
+						•{' '}
+						<a
+							href='https://texlyre.org/docs/intro'
+							target='_blank'
+							rel='noreferrer'
+						>
+							{t('Documentation')}
+						</a>{' '}
+						•{' '}
+						<a
+							href='https://github.com/TeXlyre/texlyre'
+							target='_blank'
+							rel='noreferrer'
+						>
+							{t('Source Code')}
+						</a>{' '}
+						•{' '}
+						<button
+							type='button'
+							onClick={() => {
+								pushHash('privacy-policy');
+								setShowPrivacy(true);
+							}}
+							className='privacy-link'
+						>
+							{t('Privacy')}
+						</button>{' '}
+						•{/* {t('Built with TeXlyre')} */}
+						<a href='https://texlyre.org' target='_blank' rel='noreferrer'>
+							<img src={texlyreLogo} className='logo' alt={t('TeXlyre logo')} />
+						</a>{' '}
+						{`v${__APP_VERSION__}`}
+					</span>
+				</p>
+
+				<ChatPanel className='footer-chat' />
+				<AIChatPanel
+					className='footer-ai-chat'
+					currentDocumentContent={selectedDocument?.content}
+				/>
+			</footer>
+
+			<KeyboardShortcutsModal
+				isOpen={showKeyboardShortcuts}
+				onClose={() => setShowKeyboardShortcuts(false)}
+			/>
+
+			<PrivacyModal
+				isOpen={showPrivacy}
+				onClose={() => {
+					setShowPrivacy(false);
+					if (window.location.hash === '#privacy-policy') {
+						history.back();
+					}
+				}}
+			/>
+
+			<Modal
+				isOpen={isEditingMetadata}
+				onClose={() => setIsEditingMetadata(false)}
+				title={t('Edit Project Details')}
+			>
+				<ProjectForm
+					project={{
+						id: docUrl,
+						name: projectName,
+						description: projectDescription,
+						type: projectType || 'latex',
+						compilerId: projectCompilerId,
+						docUrl: docUrl,
+						createdAt: 0,
+						updatedAt: 0,
+						ownerId: user?.id || '',
+						tags: [],
+						isFavorite: false,
+					}}
+					onSubmit={handleUpdateProjectMetadata}
+					onCancel={() => setIsEditingMetadata(false)}
+					isSubmitting={isSubmitting}
+					simpleMode={true}
+				/>
+			</Modal>
+			<ShareProjectModal
+				isOpen={showShareModal}
+				onClose={() => setShowShareModal(false)}
+				projectName={projectName}
+				shareUrl={shareUrl}
+			/>
+
+			{!isGuestUser(user) && (
+				<>
+					<ProfileSettingsModal
+						isOpen={showProfileModal}
+						onClose={() => setShowProfileModal(false)}
+					/>
+
+					<ExportAccountModal
+						isOpen={showAccountExportModal}
+						onClose={() => setShowAccountExportModal(false)}
+					/>
+
+					<DeleteAccountModal
+						isOpen={isDeleteAccountModalOpen}
+						onClose={() => setIsDeleteAccountModalOpen(false)}
+						onAccountDeleted={handleAccountDeleted}
+						onOpenExport={() => setShowAccountExportModal(true)}
+					/>
+				</>
+			)}
+			{isGuestUser(user) && (
+				<GuestUpgradeModal
+					isOpen={showGuestUpgradeModal}
+					onClose={() => setShowGuestUpgradeModal(false)}
+					onUpgradeSuccess={handleGuestUpgradeSuccess}
+				/>
+			)}
+			{!isGuestUser(user) && (
+				<BackupModal
+					isOpen={showAutoBackupModal}
+					onClose={() => setShowAutoBackupModal(false)}
+					status={status}
+					activities={activities}
+					onRequestAccess={requestAccess}
+					onSynchronize={synchronize}
+					onExportToFileSystem={synchronize}
+					onImportChanges={importChanges}
+					onDisconnect={disconnect}
+					onClearActivity={clearActivity}
+					onClearAllActivities={clearAllActivities}
+					onChangeDirectory={changeDirectory}
+					currentProjectId={sessionStorage.getItem('currentProjectId')}
+					isInEditor={true}
+				/>
+			)}
+			<ToastContainer />
+		</div>
+	);
+};
+
+const EditorApp: React.FC<EditorAppProps> = (props) => {
+	if (!isValidYjsUrl(props.docUrl)) {
+		return (
+			<div className='app-container'>
+				<div className='error-message'>
+					<p>{t('Invalid project URL.')}</p>
+					<button className='button primary' onClick={props.onBackToProjects}>
+						{t('Back to Projects')}
+					</button>
+				</div>
+			</div>
+		);
+	}
+	return (
+		<CollabProvider docUrl={props.docUrl} collectionName='yjs_metadata'>
+			<ChatProvider docUrl={props.docUrl}>
+				<AIChatProvider>
+					<FileTreeProvider docUrl={props.docUrl}>
+						<FileSyncProvider docUrl={props.docUrl}>
+							<LaTeXProvider>
+								<TypstProvider>
+									<ExternalCompilerProvider>
+										<SourceMapProvider>
+											<ContentFormatterProvider>
+												<EditorAppView {...props} />
+											</ContentFormatterProvider>
+										</SourceMapProvider>
+									</ExternalCompilerProvider>
+								</TypstProvider>
+							</LaTeXProvider>
+						</FileSyncProvider>
+					</FileTreeProvider>
+				</AIChatProvider>
+			</ChatProvider>
+		</CollabProvider>
+	);
+};
+
+export default EditorApp;

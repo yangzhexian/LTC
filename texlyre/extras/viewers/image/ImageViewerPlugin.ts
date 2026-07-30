@@ -1,0 +1,62 @@
+// extras/viewers/image/ImageViewerPlugin.ts
+import { t } from '@/i18n';
+import type { ViewerPlugin } from '@/plugins/PluginInterface';
+import CombinedImageViewer from './CombinedImageViewer';
+import { getImageViewerSettings } from './settings';
+import { ImageIcon } from './Icon';
+
+const IMAGE_EXTENSIONS = [
+	'png',
+	'jpg',
+	'jpeg',
+	'gif',
+	'bmp',
+	'webp',
+	'svg',
+	'ico',
+];
+
+const IMAGE_MIMETYPES = [
+	'image/png',
+	'image/jpeg',
+	'image/gif',
+	'image/bmp',
+	'image/webp',
+	'image/svg+xml',
+	'image/x-icon',
+];
+
+export const PLUGIN_NAME = t('Image Viewer');
+export const PLUGIN_VERSION = '0.4.0';
+
+const imageViewerPlugin: ViewerPlugin = {
+	id: 'image-viewer',
+	name: PLUGIN_NAME,
+	version: PLUGIN_VERSION,
+	type: 'viewer',
+	icon: ImageIcon,
+	rendererPluginIds: ['canvas-renderer'],
+	rendererSizeThreshold: 1 * 1024 * 1024, // 1 MB > will open in renderer
+	get settings() {
+		return getImageViewerSettings();
+	},
+
+	canHandle: (fileName: string, mimeType?: string): boolean => {
+		if (mimeType && IMAGE_MIMETYPES.includes(mimeType)) {
+			return true;
+		}
+
+		const extension = fileName.split('.').pop()?.toLowerCase();
+		return extension ? IMAGE_EXTENSIONS.includes(extension) : false;
+	},
+
+	getSupportedExtensions: () =>
+		IMAGE_EXTENSIONS.map((ext, idx) => ({
+			extension: ext,
+			mimeType: IMAGE_MIMETYPES[idx],
+		})),
+
+	renderViewer: CombinedImageViewer,
+};
+
+export default imageViewerPlugin;

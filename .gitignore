@@ -26,3 +26,8 @@ Thumbs.db
 
 # ---- VS Code ----
 .vscode/settings.json.user
+
+# ---- TeXlyre ----
+texlyre/node_modules/
+texlyre/dist/
+texlyre/.env

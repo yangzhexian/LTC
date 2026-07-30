@@ -1,0 +1,27 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bottomGradient" x1="178.08115" y1="153.89854" x2="363.43417" y2="154.59348" gradientTransform="matrix(-2.0437774,0,0,2.054647,755.11964,-246.0612)" gradientUnits="userSpaceOnUse">
+      <stop offset="0.18070437" stop-color="#324bcd"/>
+      <stop offset="0.48011547" stop-color="#ff45e2"/>
+      <stop offset="1" stop-color="#9932CC"/>
+    </linearGradient>
+    <linearGradient id="sevenGradient" x1="123.55698" y1="212.66087" x2="302.70493" y2="407.88507" gradientTransform="matrix(2.1723211,0,0,2.0055942,-263.23819,-389.59987)" gradientUnits="userSpaceOnUse">
+      <stop offset="0.22468205" stop-color="#FFD700"/>
+      <stop offset="0.48579961" stop-color="#00CED1"/>
+      <stop offset="0.78758955" stop-color="#32cc3f"/>
+      <stop offset="0.94307911" stop-color="#41e1ae"/>
+    </linearGradient>
+    <linearGradient id="ellipseGradient" x1="190.20787" y1="323.28305" x2="232.58882" y2="323.28305" gradientUnits="userSpaceOnUse">
+      <stop offset="0.09310728" stop-color="#00ae3a" stop-opacity="0.609"/>
+      <stop offset="0.81805813" stop-color="#2e009b" stop-opacity="0.964"/>
+    </linearGradient>
+  </defs>
+  <path d="m 104.92325,117.80766 c 40.33168,91.61774 200.22597,98.87855 203.9096,205.96832"
+        stroke="url(#bottomGradient)" stroke-width="81.9683" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m 60.285427,86.308059 c 89.269763,-0.768112 145.105563,-0.536538 191.205403,-0.475638 0.71228,9.31e-4 1.41982,0.0019 2.12263,0.004 2.6469,0.0059 5.22678,0.01385 7.74034,0.02395 59.62832,0.258828 81.92361,2.213785 76.02741,8.045596 8.83816,22.113273 -19.23204,43.213213 -59.21528,66.411003 -69.08261,40.08084 -173.72877,86.42437 -185.01564,155.07767 l -1.41882,7.81609"
+        stroke="url(#sevenGradient)" stroke-width="83.4917" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <ellipse cx="201.34688" cy="314.34864" rx="42.595268" ry="40.534525"
+           fill="url(#ellipseGradient)" fill-opacity="0.72"/>
+</svg>

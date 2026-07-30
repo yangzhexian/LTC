@@ -1,0 +1,838 @@
+// src/services/FileSyncService.ts
+import { FilePizzaDownloader, FilePizzaUploader } from 'filepizza-client';
+import { nanoid } from 'nanoid';
+
+import { t } from '@/i18n';
+import type { FileSyncInfo, FileSyncNotification } from '../types/fileSync';
+import type { FileNode } from '../types/files';
+import {
+	isBinaryFile,
+	isTemporaryFile,
+	toArrayBuffer,
+} from '../utils/fileUtils';
+import { fileStorageService } from './FileStorageService';
+import { notificationService } from './NotificationService';
+import { createNamedLogger } from '@/logging';
+
+const moduleLog = createNamedLogger('FileSyncService');
+
+export type ConflictResolution = 'prefer-latest' | 'prefer-local' | 'notify';
+
+class FileSyncService {
+	private activeUploaders = new Map<string, FilePizzaUploader>();
+	private activeDownloaders = new Map<string, FilePizzaDownloader>();
+	private listeners: Array<(notification: FileSyncNotification) => void> = [];
+
+	private checksumCache = new Map<
+		string,
+		{ lastModified: number; checksum: string; size: number }
+	>();
+
+	showLoadingNotification(message: string, operationId?: string): void {
+		if (this.areNotificationsEnabled()) {
+			notificationService.showLoading(message, operationId);
+		}
+	}
+
+	showSuccessNotification(
+		message: string,
+		options: {
+			operationId?: string;
+			duration?: number;
+			data?: Record<string, any>;
+		} = {},
+	): void {
+		if (this.areNotificationsEnabled()) {
+			notificationService.showSuccess(message, options);
+		}
+	}
+
+	showErrorNotification(
+		message: string,
+		options: {
+			operationId?: string;
+			duration?: number;
+			data?: Record<string, any>;
+		} = {},
+	): void {
+		if (this.areNotificationsEnabled()) {
+			notificationService.showError(message, options);
+		}
+	}
+
+	showInfoNotification(
+		message: string,
+		options: {
+			operationId?: string;
+			duration?: number;
+			data?: Record<string, any>;
+		} = {},
+	): void {
+		if (this.areNotificationsEnabled()) {
+			notificationService.showInfo(message, options);
+		}
+	}
+
+	showSyncNotification(
+		message: string,
+		options: {
+			operationId?: string;
+			duration?: number;
+			data?: Record<string, any>;
+		} = {},
+	): void {
+		if (this.areNotificationsEnabled()) {
+			notificationService.showSync(message, options);
+		}
+	}
+
+	trackSyncFailure(peerId: string): boolean {
+		const key = `sync-failures-${peerId}`;
+		const failures = Number.parseInt(localStorage.getItem(key) || '0') + 1;
+		localStorage.setItem(key, failures.toString());
+
+		if (failures >= 3) {
+			localStorage.setItem(`sync-disabled-${peerId}`, 'true');
+			return true;
+		}
+		return false;
+	}
+
+	clearSyncFailures(peerId: string): void {
+		localStorage.removeItem(`sync-failures-${peerId}`);
+		localStorage.removeItem(`sync-disabled-${peerId}`);
+	}
+
+	isSyncDisabledForPeer(peerId: string): boolean {
+		return localStorage.getItem(`sync-disabled-${peerId}`) === 'true';
+	}
+
+	async calculateFileChecksum(content: ArrayBuffer): Promise<string> {
+		const hashBuffer = await crypto.subtle.digest('SHA-256', content);
+		const hashArray = Array.from(new Uint8Array(hashBuffer));
+		return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+	}
+
+	async getLocalFileSyncInfo(
+		userId: string,
+		username: string,
+		docUrl?: string,
+	): Promise<FileSyncInfo[]> {
+		try {
+			if (docUrl) {
+				await fileStorageService.initialize(docUrl);
+			}
+
+			const allFiles = await fileStorageService.getAllFiles(true, true, false);
+			const relevantFiles = allFiles.filter(
+				(file) => file.type === 'file' && !isTemporaryFile(file.path),
+			);
+
+			const syncInfo: FileSyncInfo[] = [];
+
+			for (const file of relevantFiles) {
+				let checksum: string;
+				let size: number;
+
+				const cached = this.checksumCache.get(file.id);
+
+				if (
+					!file.isDeleted &&
+					cached &&
+					cached.lastModified === file.lastModified
+				) {
+					checksum = cached.checksum;
+					size = cached.size;
+				} else {
+					let content: ArrayBuffer;
+
+					if (file.isDeleted) {
+						content = new ArrayBuffer(0);
+					} else {
+						try {
+							const storedFile = await fileStorageService.getFile(file.id);
+							content = storedFile?.content
+								? storedFile.content instanceof ArrayBuffer
+									? storedFile.content
+									: new TextEncoder().encode(storedFile.content).buffer
+								: new ArrayBuffer(0);
+						} catch {
+							content = new ArrayBuffer(0);
+						}
+					}
+
+					checksum = await this.calculateFileChecksum(content);
+					size = file.isDeleted ? 0 : file.size || content.byteLength;
+
+					if (!file.isDeleted) {
+						this.checksumCache.set(file.id, {
+							lastModified: file.lastModified,
+							checksum,
+							size,
+						});
+					}
+				}
+
+				syncInfo.push({
+					fileId: file.id,
+					fileName: file.name,
+					filePath: file.path,
+					lastModified: file.lastModified,
+					size,
+					checksum,
+					userId,
+					username,
+					documentId: file.documentId,
+					deleted: file.isDeleted,
+				});
+			}
+
+			const currentIds = new Set(relevantFiles.map((file) => file.id));
+			for (const id of this.checksumCache.keys()) {
+				if (!currentIds.has(id)) this.checksumCache.delete(id);
+			}
+
+			return syncInfo;
+		} catch (error) {
+			moduleLog.error('Error getting local file sync info:', error);
+			return [];
+		}
+	}
+
+	shouldIgnoreFileForSync(
+		localFile: FileSyncInfo,
+		remoteFile: FileSyncInfo,
+	): boolean {
+		const localIsLinked = !!localFile.documentId;
+		const remoteIsLinked = !!remoteFile.documentId;
+
+		return (
+			localIsLinked &&
+			remoteIsLinked &&
+			localFile.checksum !== remoteFile.checksum
+		);
+	}
+
+	shouldTriggerSync(
+		localFiles: FileSyncInfo[],
+		remoteFiles: FileSyncInfo[],
+	): boolean {
+		const localFileMap = new Map(localFiles.map((f) => [f.filePath, f]));
+
+		for (const remoteFile of remoteFiles) {
+			const localFile = localFileMap.get(remoteFile.filePath);
+
+			if (!localFile) {
+				if (!remoteFile.deleted) return true;
+			} else {
+				if (
+					remoteFile.deleted &&
+					!localFile.deleted &&
+					remoteFile.lastModified > localFile.lastModified
+				) {
+					return true;
+				}
+				if (!remoteFile.deleted && !localFile.deleted) {
+					if (
+						localFile.checksum !== remoteFile.checksum &&
+						!this.shouldIgnoreFileForSync(localFile, remoteFile)
+					) {
+						return true;
+					}
+				} else if (
+					!remoteFile.deleted &&
+					localFile.deleted &&
+					remoteFile.lastModified > localFile.lastModified
+				) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	determineFilesToRequest(
+		localFiles: FileSyncInfo[],
+		remoteFiles: FileSyncInfo[],
+		conflictResolution: ConflictResolution,
+	): {
+		remoteFileId: string;
+		filePath: string;
+		lastModified: number;
+		documentId?: string;
+		isDeleted?: boolean;
+	}[] {
+		const localFileMap = new Map(localFiles.map((f) => [f.filePath, f]));
+		const filesToRequest: {
+			remoteFileId: string;
+			filePath: string;
+			lastModified: number;
+			documentId?: string;
+			isDeleted?: boolean;
+		}[] = [];
+
+		for (const remoteFile of remoteFiles) {
+			const localFile = localFileMap.get(remoteFile.filePath);
+
+			if (!localFile) {
+				if (!remoteFile.deleted) {
+					filesToRequest.push({
+						remoteFileId: remoteFile.fileId,
+						filePath: remoteFile.filePath,
+						lastModified: remoteFile.lastModified,
+						documentId: remoteFile.documentId,
+						isDeleted: false,
+					});
+				}
+			} else {
+				if (
+					remoteFile.deleted &&
+					!localFile.deleted &&
+					remoteFile.lastModified > localFile.lastModified
+				) {
+					filesToRequest.push({
+						remoteFileId: remoteFile.fileId,
+						filePath: remoteFile.filePath,
+						lastModified: remoteFile.lastModified,
+						documentId: remoteFile.documentId,
+						isDeleted: true,
+					});
+				} else if (!remoteFile.deleted && !localFile.deleted) {
+					if (localFile.checksum !== remoteFile.checksum) {
+						const localIsLinked = !!localFile.documentId;
+						const remoteIsLinked = !!remoteFile.documentId;
+
+						if (localIsLinked && remoteIsLinked) {
+							continue;
+						}
+
+						if (
+							conflictResolution === 'prefer-latest' &&
+							remoteFile.lastModified > localFile.lastModified
+						) {
+							filesToRequest.push({
+								remoteFileId: remoteFile.fileId,
+								filePath: remoteFile.filePath,
+								lastModified: remoteFile.lastModified,
+								documentId: remoteFile.documentId,
+								isDeleted: false,
+							});
+						}
+					}
+				} else if (
+					!remoteFile.deleted &&
+					localFile.deleted &&
+					remoteFile.lastModified > localFile.lastModified
+				) {
+					filesToRequest.push({
+						remoteFileId: remoteFile.fileId,
+						filePath: remoteFile.filePath,
+						lastModified: remoteFile.lastModified,
+						documentId: remoteFile.documentId,
+						isDeleted: false,
+					});
+				}
+			}
+		}
+
+		return filesToRequest;
+	}
+
+	async uploadFiles(
+		fileIds: string[],
+		requestId: string,
+		filePizzaServerUrl?: string,
+		docUrl?: string,
+	): Promise<{ link: string }> {
+		try {
+			if (docUrl) {
+				await fileStorageService.initialize(docUrl);
+			}
+			moduleLog.info(
+				`Uploading ${fileIds.length} files for request ${requestId}`,
+			);
+
+			const uploader = new FilePizzaUploader({
+				filePizzaServerUrl: filePizzaServerUrl,
+				sharedSlug: `file-sync-${requestId}`,
+			});
+
+			await uploader.initialize();
+
+			const filesToUpload: File[] = [];
+			const filesFromDb = await fileStorageService.getFilesByIds(fileIds);
+
+			for (const file of filesFromDb) {
+				if (!file) {
+					moduleLog.warn('File data not found for one of the IDs');
+					continue;
+				}
+
+				const fileContent = file.isDeleted
+					? new ArrayBuffer(0)
+					: file.content instanceof ArrayBuffer
+						? file.content
+						: file.content
+							? new TextEncoder().encode(file.content).buffer
+							: new ArrayBuffer(0);
+
+				const fileObj = new File([fileContent], file.path.substring(1), {
+					type: file.mimeType || 'application/octet-stream',
+				});
+
+				Object.defineProperty(fileObj, 'metadata', {
+					value: {
+						isDeleted: file.isDeleted,
+						documentId: file.documentId,
+					},
+					enumerable: false,
+					writable: false,
+				});
+
+				filesToUpload.push(fileObj);
+			}
+
+			if (filesToUpload.length === 0) {
+				throw new Error(t('No valid files to upload'));
+			}
+
+			uploader.setFiles(filesToUpload);
+			const shareableLinks = uploader.getShareableLinks();
+
+			if (!shareableLinks) {
+				throw new Error(t('Failed to generate shareable links'));
+			}
+
+			moduleLog.info(`Generated shareable link: ${shareableLinks.short}`);
+
+			this.releaseUploader(requestId);
+			this.activeUploaders.set(requestId, uploader);
+
+			return { link: shareableLinks.short };
+		} catch (error) {
+			moduleLog.error('Error uploading files:', error);
+			throw error;
+		}
+	}
+
+	async downloadFiles(
+		filePizzaLink: string,
+		expectedFiles: string[],
+		remoteTimestamps: Map<string, number>,
+		remoteDocumentIds: Map<string, string>,
+		remoteDeletionStates: Map<string, boolean>,
+		filePizzaServerUrl?: string,
+		docUrl?: string,
+	): Promise<void> {
+		if (docUrl) {
+			await fileStorageService.initialize(docUrl);
+		}
+
+		await this.downloadFromLink(
+			filePizzaLink,
+			expectedFiles,
+			remoteTimestamps,
+			remoteDocumentIds,
+			remoteDeletionStates,
+			filePizzaServerUrl,
+			docUrl,
+		);
+	}
+
+	private async prepareFileNodeForStorage(
+		downloadedFile: any,
+		expectedPath: string,
+		remoteTimestamp: number,
+		remoteDocumentId?: string,
+	): Promise<FileNode | null> {
+		try {
+			await fileStorageService.createDirectoryPath(expectedPath);
+
+			const fileContent = downloadedFile.content || downloadedFile.data;
+			let processedContent: ArrayBuffer;
+
+			if (!fileContent) {
+				processedContent = new ArrayBuffer(0);
+			} else if (fileContent instanceof ArrayBuffer) {
+				processedContent = fileContent;
+			} else if (fileContent instanceof Uint8Array) {
+				processedContent = toArrayBuffer(
+					fileContent.buffer.slice(
+						fileContent.byteOffset,
+						fileContent.byteOffset + fileContent.byteLength,
+					),
+				);
+			} else if (fileContent instanceof Blob) {
+				processedContent = await fileContent.arrayBuffer();
+			} else if (typeof fileContent === 'string') {
+				processedContent = new TextEncoder().encode(fileContent).buffer;
+			} else if (
+				fileContent.buffer &&
+				fileContent.buffer instanceof ArrayBuffer
+			) {
+				processedContent = fileContent.buffer.slice(
+					fileContent.byteOffset,
+					fileContent.byteOffset + fileContent.byteLength,
+				);
+			} else {
+				moduleLog.warn(
+					'Unknown content type, attempting direct use:',
+					fileContent,
+				);
+				processedContent = fileContent;
+			}
+
+			const existingFile = await fileStorageService.getFileByPath(
+				expectedPath,
+				true,
+			);
+
+			const newFile: FileNode = {
+				id: existingFile?.id || nanoid(),
+				name:
+					downloadedFile.fileName.split('/').pop() || downloadedFile.fileName,
+				path: expectedPath,
+				type: 'file',
+				content: processedContent,
+				lastModified: remoteTimestamp,
+				size: downloadedFile.size || processedContent.byteLength,
+				mimeType:
+					downloadedFile.mimeType ||
+					downloadedFile.type ||
+					'application/octet-stream',
+				isBinary: isBinaryFile(downloadedFile.fileName),
+				isDeleted: false,
+				documentId: remoteDocumentId,
+			};
+
+			return newFile;
+		} catch (error) {
+			moduleLog.error(
+				`Error preparing file ${downloadedFile.fileName} for storage:`,
+				error,
+			);
+			return null;
+		}
+	}
+
+	private async downloadFromLink(
+		link: string,
+		expectedFiles: string[],
+		remoteTimestamps: Map<string, number>,
+		remoteDocumentIds: Map<string, string>,
+		remoteDeletionStates: Map<string, boolean>,
+		filePizzaServerUrl?: string,
+		docUrl?: string,
+	): Promise<void> {
+		return new Promise((resolve, reject) => {
+			moduleLog.info(`Starting download from: ${link}`);
+
+			const downloader = new FilePizzaDownloader({
+				filePizzaServerUrl: filePizzaServerUrl,
+			});
+
+			let isResolved = false;
+			const receivedFiles: any[] = [];
+			let expectedFileCount = 0;
+
+			const cleanup = () => {
+				if (this.activeDownloaders.has(link)) {
+					try {
+						downloader.cancelDownload?.();
+					} catch (error) {
+						moduleLog.warn('Error during downloader cleanup:', error);
+					}
+					this.activeDownloaders.delete(link);
+				}
+			};
+
+			const resolveOnce = (result?: any) => {
+				if (!isResolved) {
+					isResolved = true;
+					cleanup();
+					resolve(result);
+				}
+			};
+
+			const rejectOnce = (error: any) => {
+				if (!isResolved) {
+					isResolved = true;
+					cleanup();
+					reject(error);
+				}
+			};
+
+			const checkIfAllFilesReceived = async () => {
+				if (
+					receivedFiles.length >= expectedFileCount &&
+					expectedFileCount > 0
+				) {
+					moduleLog.info(
+						`All ${expectedFileCount} files received, processing for batch save...`,
+					);
+
+					try {
+						const filesToStore: FileNode[] = [];
+						const filesToDelete: string[] = [];
+
+						for (const file of receivedFiles) {
+							const expectedPath = expectedFiles.find(
+								(path) =>
+									path === file.fileName ||
+									path.endsWith(file.fileName) ||
+									path === `/${file.fileName}`,
+							);
+
+							if (expectedPath) {
+								file.fileName = file.fileName.split('/').pop();
+								const remoteTimestamp =
+									remoteTimestamps.get(expectedPath) || Date.now();
+								const remoteDocumentId = remoteDocumentIds.get(expectedPath);
+								const isDeleted =
+									remoteDeletionStates.get(expectedPath) ||
+									file.metadata?.isDeleted ||
+									false;
+
+								if (docUrl) {
+									await fileStorageService.initialize(docUrl);
+								}
+
+								if (isDeleted) {
+									moduleLog.info(`Marking file for deletion: ${expectedPath}`);
+									filesToDelete.push(expectedPath);
+								} else {
+									const fileNode = await this.prepareFileNodeForStorage(
+										file,
+										expectedPath,
+										remoteTimestamp,
+										remoteDocumentId,
+									);
+									if (fileNode) {
+										filesToStore.push(fileNode);
+									}
+								}
+							} else {
+								moduleLog.warn(`Unexpected file received: ${file.fileName}`);
+							}
+						}
+
+						if (filesToStore.length > 0) {
+							await fileStorageService.batchStoreFiles(filesToStore, {
+								preserveTimestamp: true,
+								showConflictDialog: false,
+								preserveDeletionStatus: false,
+							});
+						}
+
+						if (filesToDelete.length > 0) {
+							for (const filePath of filesToDelete) {
+								try {
+									await fileStorageService.deleteFileByPath(filePath, {
+										showDeleteDialog: false,
+										hardDelete: false,
+										allowLinkedFileDelete: true,
+									});
+									moduleLog.info(`Successfully deleted file: ${filePath}`);
+								} catch (error) {
+									moduleLog.warn(`Failed to delete file ${filePath}:`, error);
+								}
+							}
+						}
+
+						const totalProcessed = filesToStore.length + filesToDelete.length;
+						this.notifyListeners({
+							id: nanoid(),
+							type: 'sync_complete',
+							message: t(
+								'Successfully processed {count} file ({stored} stored, {deleted} deleted)',
+								{
+									count: totalProcessed,
+									stored: filesToStore.length,
+									deleted: filesToDelete.length,
+								},
+							),
+							timestamp: Date.now(),
+							data: {
+								fileCount: totalProcessed,
+								stored: filesToStore.length,
+								deleted: filesToDelete.length,
+							},
+						});
+
+						resolveOnce();
+					} catch (error) {
+						rejectOnce(error);
+					}
+				}
+			};
+
+			const timeout = setTimeout(() => {
+				rejectOnce(new Error(t('Download timeout after 60 seconds')));
+			}, 60000);
+
+			downloader
+				.initialize()
+				.then(() => {
+					moduleLog.info('Downloader initialized, setting up event handlers');
+
+					downloader.on('error', (error) => {
+						moduleLog.error('Downloader error:', error);
+						clearTimeout(timeout);
+						rejectOnce(error);
+					});
+
+					downloader.on('passwordRequired', () => {
+						moduleLog.info('Password required for download');
+						clearTimeout(timeout);
+						rejectOnce(new Error(t('Password required for download')));
+					});
+
+					downloader.on('passwordInvalid', (message) => {
+						moduleLog.info('Invalid password:', message);
+						clearTimeout(timeout);
+						rejectOnce(
+							new Error(t('Invalid password: {message}', { message })),
+						);
+					});
+
+					downloader.on('info', (filesInfo) => {
+						moduleLog.info(
+							`Received file info, ${filesInfo.length} files available`,
+						);
+						if (filesInfo.length === 0) {
+							clearTimeout(timeout);
+							rejectOnce(new Error(t('No files available for download')));
+							return;
+						}
+
+						expectedFileCount = filesInfo.length;
+						const availableFiles = filesInfo.map((f) => f.fileName);
+						moduleLog.info('Available files:', availableFiles);
+						moduleLog.info('Expected files:', expectedFiles);
+
+						downloader.startDownload().catch((error) => {
+							moduleLog.error('Error starting download:', error);
+							clearTimeout(timeout);
+							rejectOnce(error);
+						});
+					});
+
+					downloader.on('fileComplete', (file) => {
+						moduleLog.info(`File completed: ${file.fileName}`);
+						receivedFiles.push(file);
+						checkIfAllFilesReceived();
+					});
+
+					downloader.on('complete', (files) => {
+						moduleLog.info(
+							`Download complete event, files array length: ${files.length}`,
+						);
+						moduleLog.info(
+							`Received files from fileComplete events: ${receivedFiles.length}`,
+						);
+						clearTimeout(timeout);
+
+						if (files.length > 0) {
+							receivedFiles.push(
+								...files.filter(
+									(f) =>
+										!receivedFiles.some((rf) => rf.fileName === f.fileName),
+								),
+							);
+						}
+
+						checkIfAllFilesReceived();
+					});
+
+					this.activeDownloaders.set(link, downloader);
+
+					moduleLog.info(`Connecting to: ${link}`);
+					return downloader.connect(link);
+				})
+				.then((connected) => {
+					if (!connected) {
+						clearTimeout(timeout);
+						rejectOnce(
+							new Error(
+								t('Failed to connect to {provider}', {
+									provider: t('FilePizza'),
+								}),
+							),
+						);
+					}
+					moduleLog.info('Connected successfully, waiting for file info...');
+				})
+				.catch((error) => {
+					moduleLog.error('Connection/initialization error:', error);
+					clearTimeout(timeout);
+					rejectOnce(error);
+				});
+		});
+	}
+
+	releaseUploader(requestId: string): void {
+		const uploader = this.activeUploaders.get(requestId);
+		if (!uploader) return;
+
+		try {
+			uploader.stop?.();
+		} catch (error) {
+			moduleLog.error('Error stopping uploader:', error);
+		}
+		this.activeUploaders.delete(requestId);
+	}
+
+	cleanup(): void {
+		moduleLog.info('Cleaning up active connections');
+
+		this.activeUploaders.forEach((uploader) => {
+			try {
+				uploader.stop?.();
+			} catch (error) {
+				moduleLog.error('Error stopping uploader:', error);
+			}
+		});
+
+		this.activeDownloaders.forEach((downloader) => {
+			try {
+				downloader.cancelDownload?.();
+			} catch (error) {
+				moduleLog.error('Error canceling downloader:', error);
+			}
+		});
+
+		this.activeUploaders.clear();
+		this.activeDownloaders.clear();
+	}
+
+	addListener(
+		callback: (notification: FileSyncNotification) => void,
+	): () => void {
+		this.listeners.push(callback);
+		return () => {
+			this.listeners = this.listeners.filter((l) => l !== callback);
+		};
+	}
+
+	private areNotificationsEnabled(): boolean {
+		const userId = localStorage.getItem('texlyre-current-user');
+		const storageKey = userId
+			? `texlyre-user-${userId}-settings`
+			: 'texlyre-settings';
+		try {
+			const settings = JSON.parse(localStorage.getItem(storageKey) || '{}');
+			return settings['file-sync-notifications'] !== false;
+		} catch {
+			return true;
+		}
+	}
+
+	private notifyListeners(notification: FileSyncNotification): void {
+		this.listeners.forEach((listener) => {
+			listener(notification);
+		});
+	}
+}
+
+export const fileSyncService = new FileSyncService();

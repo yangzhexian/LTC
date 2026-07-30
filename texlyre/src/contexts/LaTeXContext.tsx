@@ -1,0 +1,389 @@
+// src/contexts/LaTeXContext.tsx
+import type React from 'react';
+import {
+	type ReactNode,
+	createContext,
+	useEffect,
+	useCallback,
+	useState,
+} from 'react';
+
+import { t } from '@/i18n';
+import { useFileTree } from '../hooks/useFileTree';
+import { useSettings } from '../hooks/useSettings';
+import { latexService } from '../services/LaTeXService';
+import type {
+	LaTeXContextType,
+	LaTeXOutputFormat,
+	LaTeXEngine,
+} from '../types/latex';
+import { LATEX_ENGINES } from '../types/latex';
+import {
+	parseUrlFragments,
+	replaceHash,
+	getProjectName,
+} from '../utils/urlUtils';
+import { popoutViewerService } from '../services/PopoutViewerService';
+import { createNamedLogger } from '@/logging';
+
+const moduleLog = createNamedLogger('LaTeXContext');
+
+export const LaTeXContext = createContext<LaTeXContextType | null>(null);
+
+interface LaTeXProviderProps {
+	children: ReactNode;
+}
+
+export const LaTeXProvider: React.FC<LaTeXProviderProps> = ({ children }) => {
+	const { fileTree, refreshFileTree } = useFileTree();
+	const { getSetting } = useSettings();
+	const [isCompiling, setIsCompiling] = useState<boolean>(false);
+	const [isInitializing, setIsInitializing] = useState(false);
+	const [isExporting, setIsExporting] = useState(false);
+	const [hasAutoCompiled, setHasAutoCompiled] = useState(false);
+	const [compileError, setCompileError] = useState<string | null>(null);
+	const [compiledPdf, setCompiledPdf] = useState<Uint8Array | null>(null);
+	const [compiledCanvas, setCompiledCanvas] = useState<Uint8Array | null>(null);
+	const [compileLog, setCompileLog] = useState<string>('');
+	const [currentView, setCurrentView] = useState<'log' | 'output'>('log');
+	const [logIndicator, setLogIndicator] = useState<
+		'idle' | 'success' | 'error'
+	>('idle');
+	const [activeCompiler, setActiveCompiler] = useState<string | null>(null);
+
+	const latexEngine =
+		(getSetting('latex-engine')?.value as LaTeXEngine) ?? 'pdftex';
+	const currentFormat =
+		(getSetting('latex-default-format')?.value as LaTeXOutputFormat) ?? 'pdf';
+	const texliveEndpoint =
+		(getSetting('latex-texlive-endpoint')?.value as string) ??
+		'http://texlive.localhost:8082';
+	const storeCache =
+		(getSetting('latex-store-cache')?.value as boolean) ?? true;
+	const storeWorkingDirectory =
+		(getSetting('latex-store-working-directory')?.value as boolean) ?? false;
+	const busyTeXEndpoint =
+		(getSetting('latex-busytex-endpoint')?.value as string) ??
+		'http://texlive2026.localhost:8082';
+	const busyTeXBundles =
+		(getSetting('latex-busytex-bundles')?.value as string) ?? 'recommended';
+
+	useEffect(() => {
+		const handleCompilerActive = (event: CustomEvent) => {
+			setActiveCompiler(event.detail.type);
+		};
+		document.addEventListener(
+			'compiler-active',
+			handleCompilerActive as EventListener,
+		);
+		return () => {
+			document.removeEventListener(
+				'compiler-active',
+				handleCompilerActive as EventListener,
+			);
+		};
+	}, []);
+
+	useEffect(() => {
+		latexService.setTexliveEndpoint(texliveEndpoint);
+		latexService.setStoreCache(storeCache);
+		latexService.setStoreWorkingDirectory(storeWorkingDirectory);
+		latexService.setBusyTeXEndpoint(busyTeXEndpoint);
+		latexService.setBusyTeXBundles(busyTeXBundles.split(',').filter(Boolean));
+	}, [
+		texliveEndpoint,
+		storeCache,
+		storeWorkingDirectory,
+		busyTeXEndpoint,
+		busyTeXBundles,
+	]);
+
+	const compileDocument = async (
+		mainFileName: string,
+		format: LaTeXOutputFormat = currentFormat,
+	): Promise<void> => {
+		try {
+			const engineToUse = latexService.getCurrentEngineType();
+			if (!latexService.isReady()) {
+				await latexService.initialize(engineToUse);
+			}
+		} finally {
+			setIsInitializing(false);
+		}
+
+		setIsCompiling(true);
+		setCompileError(null);
+		setActiveCompiler('latex');
+
+		// setCompiledPdf(null);
+		setCompiledCanvas(null);
+
+		try {
+			const result = await latexService.compileLaTeX(
+				mainFileName,
+				fileTree,
+				format,
+			);
+
+			setCompileLog(result.log);
+			if (result.status === 0 && result.pdf) {
+				switch (format) {
+					case 'pdf': {
+						setCompiledPdf(result.pdf);
+						setCurrentView('output');
+						setLogIndicator('success');
+						const fileName =
+							mainFileName
+								.split('/')
+								.pop()
+								?.replace(/\.(tex|ltx|latex)$/i, '.pdf') || 'output.pdf';
+						popoutViewerService.sendContent({
+							kind: 'pdf',
+							content: result.pdf,
+							mimeType: 'application/pdf',
+							fileName,
+							projectName: getProjectName(t('LaTeX Project')),
+						});
+						break;
+					}
+					case 'canvas-pdf': {
+						setCompiledCanvas(result.pdf);
+						setCurrentView('output');
+						setLogIndicator('success');
+						const canvasFileName =
+							mainFileName
+								.split('/')
+								.pop()
+								?.replace(/\.(tex|ltx|latex)$/i, '.pdf') || 'output.pdf';
+						popoutViewerService.sendContent({
+							kind: 'canvas-pdf',
+							content: result.pdf,
+							mimeType: 'application/pdf',
+							fileName: canvasFileName,
+							projectName: getProjectName(t('LaTeX Project')),
+						});
+						break;
+					}
+				}
+			} else {
+				setCompileError(
+					t('Compilation failed. Check the log in the main window.'),
+				);
+				if (format === 'pdf') setCurrentView('log');
+				setLogIndicator('error');
+				popoutViewerService.sendCompileResult(result.status, result.log);
+			}
+
+			await refreshFileTree();
+		} catch (error) {
+			setCompileError(
+				error instanceof Error ? error.message : t('Unknown error'),
+			);
+			setCurrentView('log');
+			setLogIndicator('error');
+
+			popoutViewerService.sendCompileResult(
+				-1,
+				error instanceof Error ? error.message : t('Unknown error'),
+			);
+		} finally {
+			setIsCompiling(false);
+		}
+	};
+
+	const handleSetLatexEngine = useCallback(
+		async (_engine: LaTeXEngine): Promise<void> => {
+			// NOTE (fabawi): no-op since engine is now driven by project properties with global setting fallback
+		},
+		[],
+	);
+
+	const triggerAutoCompile = useCallback(() => {
+		const hashUrl = window.location.hash.substring(1);
+		const fragments = parseUrlFragments(hashUrl);
+		const engine = fragments.compile as LaTeXEngine;
+		const isLatexEngine = LATEX_ENGINES.includes(engine);
+
+		if (isLatexEngine) {
+			const cleanUrl = hashUrl.replace(/&compile:[^&]*/, '');
+			replaceHash(cleanUrl);
+			document.dispatchEvent(
+				new CustomEvent('trigger-compile-with-engine', { detail: { engine } }),
+			);
+			setHasAutoCompiled(true);
+			return;
+		}
+
+		const autoCompileEnabled =
+			(getSetting('latex-auto-compile-on-open')?.value as boolean) ?? false;
+		if (autoCompileEnabled && !hasAutoCompiled) {
+			document.dispatchEvent(new CustomEvent('trigger-compile'));
+			setHasAutoCompiled(true);
+		}
+	}, [getSetting, hasAutoCompiled]);
+
+	const stopCompilation = () => {
+		if (isCompiling && latexService.isCompiling()) {
+			latexService.stopCompilation();
+			latexService.dismissCurrentNotification();
+			setIsCompiling(false);
+			setCompileError(t('Compilation stopped by user'));
+		}
+	};
+
+	const exportDocument = async (
+		mainFileName: string,
+		options: {
+			engine?: LaTeXEngine;
+			format?: 'pdf' | 'dvi';
+			includeLog?: boolean;
+			includeDvi?: boolean;
+			includeBbl?: boolean;
+			includeWorkDir?: boolean;
+		} = {},
+	): Promise<void> => {
+		try {
+			await latexService.exportDocument(mainFileName, fileTree, options);
+		} finally {
+			setIsExporting(false);
+		}
+	};
+
+	const toggleOutputView = () => {
+		setCurrentView(currentView === 'log' ? 'output' : 'log');
+	};
+
+	const clearCache = async (): Promise<void> => {
+		try {
+			await latexService.clearCacheDirectories();
+			await refreshFileTree();
+		} catch (error) {
+			moduleLog.error('Failed to clear cache:', error);
+			setCompileError('Failed to clear cache');
+		}
+	};
+
+	const compileWithClearCache = async (
+		mainFileName: string,
+		format: LaTeXOutputFormat = currentFormat,
+	): Promise<void> => {
+		try {
+			const engineToUse = latexService.getCurrentEngineType();
+			if (!latexService.isReady()) {
+				await latexService.initialize(engineToUse);
+			}
+		} finally {
+			setIsInitializing(false);
+		}
+
+		setIsCompiling(true);
+		setCompileError(null);
+		setActiveCompiler('latex');
+
+		setCompiledPdf(null);
+		setCompiledCanvas(null);
+
+		try {
+			const result = await latexService.clearCacheAndCompile(
+				mainFileName,
+				fileTree,
+				format,
+			);
+
+			setCompileLog(result.log);
+			if (result.status === 0 && result.pdf) {
+				switch (format) {
+					case 'pdf': {
+						setCompiledPdf(result.pdf);
+						setCurrentView('output');
+						setLogIndicator('success');
+						const fileName =
+							mainFileName
+								.split('/')
+								.pop()
+								?.replace(/\.(tex|ltx|latex)$/i, '.pdf') || 'output.pdf';
+						popoutViewerService.sendContent({
+							kind: 'pdf',
+							content: result.pdf,
+							mimeType: 'application/pdf',
+							fileName,
+							projectName: getProjectName(t('LaTeX Project')),
+						});
+						break;
+					}
+					case 'canvas-pdf': {
+						setCompiledCanvas(result.pdf);
+						setCurrentView('output');
+						setLogIndicator('success');
+						const canvasFileName =
+							mainFileName
+								.split('/')
+								.pop()
+								?.replace(/\.(tex|ltx|latex)$/i, '.pdf') || 'output.pdf';
+						popoutViewerService.sendContent({
+							kind: 'canvas-pdf',
+							content: result.pdf,
+							mimeType: 'application/pdf',
+							fileName: canvasFileName,
+							projectName: getProjectName(t('LaTeX Project')),
+						});
+						break;
+					}
+				}
+			} else {
+				setCompileError(
+					t('Compilation failed. Check the log in the main window.'),
+				);
+				if (format === 'pdf') setCurrentView('log');
+				setLogIndicator('error');
+				popoutViewerService.sendCompileResult(result.status, result.log);
+			}
+
+			await refreshFileTree();
+		} catch (error) {
+			setCompileError(
+				error instanceof Error ? error.message : t('Unknown error'),
+			);
+			setCurrentView('log');
+			setLogIndicator('error');
+
+			popoutViewerService.sendCompileResult(
+				-1,
+				error instanceof Error ? error.message : t('Unknown error'),
+			);
+		} finally {
+			setIsCompiling(false);
+		}
+	};
+
+	return (
+		<LaTeXContext.Provider
+			value={{
+				isCompiling,
+				isInitializing,
+				setIsInitializing,
+				isExporting,
+				setIsExporting,
+				compileError,
+				compiledPdf,
+				compiledCanvas,
+				compileLog,
+				currentFormat,
+				compileDocument,
+				stopCompilation,
+				toggleOutputView,
+				currentView,
+				logIndicator,
+				latexEngine,
+				setLatexEngine: handleSetLatexEngine,
+				clearCache,
+				compileWithClearCache,
+				triggerAutoCompile,
+				activeCompiler,
+				exportDocument,
+			}}
+		>
+			{children}
+		</LaTeXContext.Provider>
+	);
+};
