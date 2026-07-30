@@ -165,23 +165,7 @@ const config: TexlyreConfig = {
                 },
             },
         },
-        server: {
-            settings: {
-                collabProviderType: 'websocket',
-                collabWebsocketServer: 'ws://localhost:8082',
-                collabAutoReconnect: true,
-                collabSignalingServers: '',
-                fileSyncServerUrl: '',
-                latexBusytexEndpoint: '',
-                latexTexliveEndpoint: '',
-                themeVariant: 'light',
-            },
-            properties: {
-                global: {
-                    pdfRendererScrollView: true,
-                },
-            },
-        },
+
     },
 };
 

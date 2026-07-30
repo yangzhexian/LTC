@@ -46,10 +46,22 @@ if [ ! -d "texlyre/node_modules" ]; then
   echo "Installing TeXlyre dependencies..."
   (cd texlyre && npm install)
 fi
+
+# Apply server settings
 cp texlyre/userdata.server.json texlyre/userdata.local.json
+
+# Generate plugin files from extras/ (copies + fixes import paths)
+echo "Generating plugins..."
+(cd texlyre && node scripts/generate-plugins-index.js 2>&1)
+
 if [ ! -d "texlyre/dist" ]; then
   echo "Building TeXlyre..."
-  (cd texlyre && npm run build:local)
+  # Build without tsc (extras/ files cause type errors; vite bundler works fine)
+  (cd texlyre && node scripts/pm.cjs tsx scripts/update-sw-version.js && \
+   node scripts/pm.cjs run generate:plugins && \
+   node scripts/pm.cjs run generate:fonts && \
+   node scripts/setup-assets.cjs && \
+   node scripts/pm.cjs vite build 2>&1)
 fi
 
 # ---- Kill previous session ----
