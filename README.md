@@ -87,7 +87,8 @@ This creates a tmux session named `ltc` with two windows — one for `latexmk -p
 ├── sections/             # Split .tex files (optional)
 ├── scripts/
 │   ├── httpserver.py     # Custom PDF-only HTTP server (auto-refresh)
-│   └── start.sh          # CLI one-click launcher (tmux-based)
+│   ├── start.sh          # Single-project launcher (tmux-based)
+│   └── manager.sh        # Multi-project manager (status/start/stop)
 ├── .vscode/
 │   ├── settings.json     # LaTeX Workshop config (auto-build on save, no PDF viewer)
 │   ├── tasks.json        # VS Code Task: "Start All Services"
@@ -116,6 +117,16 @@ This creates a tmux session named `ltc` with two windows — one for `latexmk -p
 2. Edit any `.tex` file — changes appear in real-time for everyone
 3. Open **`http://localhost:8766/`** in a browser
 4. The PDF auto-refreshes every ~2 seconds — no manual refresh needed
+
+### Can Guests use SyncTeX (PDF ↔ TeX jumping)?
+
+**No.** SyncTeX requires the `synctex` binary (part of TeX Live) and VS Code ↔ PDF viewer
+integration, both of which are absent in a browser-based PDF viewer.
+
+If a collaborator needs SyncTeX, they should connect to the server via **Remote-SSH**
+(rather than, or in addition to, Live Share).  They will then have the full TeX Live
+environment and LaTeX Workshop — exactly like the Host.  Live Share can still be used
+alongside Remote-SSH for additional guests.
 
 ---
 
@@ -215,6 +226,47 @@ ssh -L 8766:localhost:8766 user@server
 - Guests who only browse and don't edit won't trigger saves
 - Only the person who makes edits triggers a recompile
 - Anyone can trigger a manual save with `Ctrl+S`
+
+---
+
+## Multi-Project Management
+
+Use `scripts/manager.sh` to manage multiple LaTeX projects simultaneously under a
+common base directory (e.g. `~/Projects`).
+
+```bash
+# Status of all projects under ~/Projects
+bash scripts/manager.sh ~/Projects status
+
+# Start all projects (auto-assigns ports 8761, 8762, …)
+bash scripts/manager.sh ~/Projects start
+
+# Start a single project
+bash scripts/manager.sh ~/Projects start proj_1
+
+# Stop all / stop one
+bash scripts/manager.sh ~/Projects stop
+bash scripts/manager.sh ~/Projects stop proj_2
+
+# Attach to the shared tmux session to see all terminals
+tmux attach -t ltc
+```
+
+**How it works:**
+- Scans `~/Projects/*/main.tex` to discover projects
+- Each project runs in a **tmux window** (one window = one project)
+  - Pane 0: `latexmk -pvc`
+  - Pane 1: `httpserver.py` on a **unique port** (base 8761, +1 per project)
+- Customise a project's port by creating a `.ltc` file in its root:
+  ```bash
+  echo "PORT=8888" > ~/Projects/proj_1/.ltc
+  ```
+- The `<project>` argument matches the **folder name**, so `proj_1` matches
+  `~/Projects/proj_1`.
+
+**Live Share with multiple projects:** Share each port individually via
+"Live Share: Share Ports" (add 8761, 8762, …).  Guests access each project's PDF
+at `http://localhost:8761/`, `http://localhost:8762/`, etc.
 
 ---
 
