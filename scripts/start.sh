@@ -8,7 +8,7 @@
 # This script:
 #   1. Does an initial build with latexmk.
 #   2. Starts latexmk in continuous preview mode (watches for changes).
-#   3. Starts a Python HTTP server on port 8765.
+#   3. Starts a Python HTTP server on port 8766.
 #
 # All three run inside a single tmux session named "ltc".
 # Detach with:  Ctrl+B, D
@@ -20,7 +20,7 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-PORT=${1:-8765}
+PORT=${1:-8766}
 SESSION="ltc"
 
 echo "=== LaTeX Collaboration Server ==="

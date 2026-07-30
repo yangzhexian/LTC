@@ -7,7 +7,7 @@ A zero-friction setup for real-time collaborative LaTeX editing on a remote serv
 ```
 Remote Linux Server (TeX Live)
 ├── latexmk — auto-compiles .tex on save
-├── python3 -m http.server — serves PDF on port 8765
+├── python3 -m http.server — serves PDF on port 8766
 └── VS Code Live Share — shares the port to Guests
 
 Guests → VS Code + Live Share → edit .tex files → refresh browser for PDF
@@ -45,7 +45,7 @@ This launches three things **in sequence**:
 
 1. **Initial Build** — runs `latexmk -pdf` once
 2. **latexmk (continuous watch)** — watches all `.tex` files and recompiles on change
-3. **HTTP Server** — serves project root on **port 8765**
+3. **HTTP Server** — serves project root on **port 8766**
 
 Each runs in its own terminal tab inside the VS Code terminal panel.
 
@@ -54,8 +54,8 @@ Each runs in its own terminal tab inside the VS Code terminal panel.
 1. Click **"Live Share"** in the status bar (bottom-right) to start a session
 2. Send the invite link to Guests (via chat, email, etc.)
 3. Open **Command Palette** (`Ctrl+Shift+P`) → **"Live Share: Share Ports"**
-4. Add port **`8765`**
-5. Tell Guests to open **`http://localhost:8765/main.pdf`** in their browser
+4. Add port **`8766`**
+5. Tell Guests to open **`http://localhost:8766/main.pdf`** in their browser
 
 ---
 
@@ -109,7 +109,7 @@ This creates a tmux session named `ltc` with two windows — one for `latexmk -p
 **Workflow for Guests:**
 1. Click the Live Share invite link → VS Code opens the project
 2. Edit any `.tex` file — changes appear in real-time for everyone
-3. Open **`http://localhost:8765/main.pdf`** in a browser
+3. Open **`http://localhost:8766/main.pdf`** in a browser
 4. After Host saves a file, refresh the browser to see the updated PDF
 
 ---
@@ -150,12 +150,12 @@ This tells latexmk to use `cat` as the "viewer" (no-op) and not to wait for the 
 
 ### 2. Port conflict
 
-**Problem:** Port 8765 is already in use.
+**Problem:** Port 8766 is already in use.
 
 **Fix:** Kill the old process or change the port:
 ```bash
-# Find process on port 8765
-ss -tlnp | grep 8765
+# Find process on port 8766
+ss -tlnp | grep 8766
 # Kill it
 kill <PID>
 # Or use a different port:
@@ -173,24 +173,24 @@ python3 -m http.server 8766
 
 For a permanent fix, you can disable caching in the HTTP server. The `start.sh` script does not disable caching by default; to do so, add a custom Python server (see `scripts/cached_http_server.py` as an exercise).
 
-### 4. Guests see "Connection refused" at localhost:8765
+### 4. Guests see "Connection refused" at localhost:8766
 
 **Cause:** The port was not shared via Live Share, or the Live Share session ended.
 
-**Fix:** Host must re-share the port: Command Palette → "Live Share: Share Ports" → `8765`.
+**Fix:** Host must re-share the port: Command Palette → "Live Share: Share Ports" → `8766`.
 
 ### 5. Firewall blocks the port
 
-**Problem:** Guests want to access the server directly (without Live Share) but a firewall blocks port 8765.
+**Problem:** Guests want to access the server directly (without Live Share) but a firewall blocks port 8766.
 
 **Fix (if applicable):**
 ```bash
-sudo firewall-cmd --add-port=8765/tcp --permanent
+sudo firewall-cmd --add-port=8766/tcp --permanent
 sudo firewall-cmd --reload
 ```
 Or use an SSH tunnel:
 ```bash
-ssh -L 8765:localhost:8765 user@server
+ssh -L 8766:localhost:8766 user@server
 ```
 
 ### 6. Auto-save vs manual save
@@ -210,7 +210,7 @@ ssh -L 8765:localhost:8765 user@server
 **Workflow for repeat sessions:**
 
 1. Host starts the Live Share session
-2. Host re-shares port 8765 (Command Palette → "Live Share: Share Ports")
+2. Host re-shares port 8766 (Command Palette → "Live Share: Share Ports")
 3. Done
 
 There is **no way** to make port sharing fully automatic across Live Share sessions, but the overhead is minimal — it's two clicks after starting the session.

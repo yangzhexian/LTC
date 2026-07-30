@@ -9,13 +9,13 @@
     },
     "tasks": [
         {
-            "label": "HTTP Server (port 8765)",
+            "label": "HTTP Server (port 8766)",
             "type": "shell",
             "command": "python3",
             "args": [
                 "-m",
                 "http.server",
-                "8765"
+                "8766"
             ],
             "isBackground": true,
             "problemMatcher": {
@@ -95,7 +95,7 @@
             "dependsOn": [
                 "Initial Build",
                 "latexmk (continuous watch)",
-                "HTTP Server (port 8765)"
+                "HTTP Server (port 8766)"
             ],
             "dependsOrder": "sequence",
             "problemMatcher": [],
