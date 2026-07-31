@@ -1,31 +1,28 @@
 /* Terminal panel — used as a tab inside the output window */
-.terminal-panel {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  font-size: 0.85rem;
-  height: 100%;
-  width: 100%;
-  border: none;
-  outline: none;
-}
 
-/* ---- Light mode (explicit, no dark fallbacks) ---- */
+/* ---- Light mode (explicit, !important to beat any inherited styles) ---- */
 [data-theme-mode='light'] .terminal-panel,
-:root:not([data-theme-mode='dark']) .terminal-panel {
-  background: #ffffff;
+:root:not([data-theme-mode='dark']) .terminal-panel,
+.terminal-panel {
+  background: #ffffff !important;
+  border: none !important;
+  outline: none !important;
 }
 
 [data-theme-mode='light'] .terminal-panel-header,
-:root:not([data-theme-mode='dark']) .terminal-panel-header {
-  background: #f3f4f6;
-  border-bottom: 1px solid #d8dee6;
-  color: #1f2328;
+:root:not([data-theme-mode='dark']) .terminal-panel-header,
+.terminal-panel-header {
+  background: #f3f4f6 !important;
+  border-bottom: 1px solid #d8dee6 !important;
+  color: #1f2328 !important;
 }
 
 [data-theme-mode='light'] .terminal-container,
-:root:not([data-theme-mode='dark']) .terminal-container {
-  background: #ffffff;
+:root:not([data-theme-mode='dark']) .terminal-container,
+.terminal-container {
+  background: #ffffff !important;
+  border: none !important;
+  padding: 0 !important;
 }
 
 [data-theme-mode='light'] .terminal-cwd,
@@ -35,21 +32,35 @@
 
 /* ---- Dark mode ---- */
 [data-theme-mode='dark'] .terminal-panel {
-  background: #1e1e2e;
+  background: #1e1e2e !important;
+  border: none !important;
 }
 
 [data-theme-mode='dark'] .terminal-panel-header {
-  background: #181825;
-  border-bottom: 1px solid #313244;
-  color: #cdd6f4;
+  background: #181825 !important;
+  border-bottom: 1px solid #313244 !important;
+  color: #cdd6f4 !important;
 }
 
 [data-theme-mode='dark'] .terminal-container {
-  background: #1e1e2e;
+  background: #1e1e2e !important;
+  border: none !important;
+  padding: 0 !important;
 }
 
 [data-theme-mode='dark'] .terminal-cwd {
   color: #7f8ea3;
+}
+
+/* ---- Layout ---- */
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 0.85rem;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .terminal-panel-header {
@@ -59,6 +70,7 @@
   padding: 3px 10px;
   user-select: none;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .terminal-panel-title {
@@ -107,15 +119,27 @@
 
 .terminal-container {
   flex: 1;
-  padding: 4px;
   min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .terminal-container .xterm {
   height: 100%;
-  padding: 4px;
+  padding: 0 !important;
+}
+
+/* Force xterm surface to match the theme and fill fully */
+.terminal-container .xterm,
+.terminal-container .xterm-viewport,
+.terminal-container .xterm-screen,
+.terminal-container .xterm-rows {
+  border: none !important;
+  outline: none !important;
+  margin: 0 !important;
 }
 
 .terminal-container .xterm-viewport {
   scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.5) transparent;
 }
