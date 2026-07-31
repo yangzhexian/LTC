@@ -41,12 +41,15 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
 		const signalingServersSetting = getSetting('collab-signaling-servers');
 		const awarenessTimeoutSetting = getSetting('collab-awareness-timeout');
 		const autoReconnectSetting = getSetting('collab-auto-reconnect');
+		const providerTypeSetting = getSetting('collab-provider-type');
+		const websocketServerSetting = getSetting('collab-websocket-server');
 
 		// Wait until all collaboration settings are available
 		if (
 			!signalingServersSetting ||
 			!awarenessTimeoutSetting ||
-			!autoReconnectSetting
+			!autoReconnectSetting ||
+			!providerTypeSetting
 		) {
 			return;
 		}
@@ -54,11 +57,15 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({
 		const signalingServers = signalingServersSetting.value as string;
 		const awarenessTimeout = awarenessTimeoutSetting.value as number;
 		const autoReconnect = autoReconnectSetting.value as boolean;
+		const providerType = providerTypeSetting.value as string;
+		const websocketServer = websocketServerSetting?.value as string | undefined;
 
 		const serversToUse = signalingServers.split(',').map((s) => s.trim());
 
 		const { doc } = collabService.connect(projectId, 'chat', {
+			providerType: providerType === 'websocket' ? 'websocket' : 'webrtc',
 			signalingServers: serversToUse,
+			websocketServer,
 			autoReconnect,
 			awarenessTimeout: awarenessTimeout * 1000,
 		});

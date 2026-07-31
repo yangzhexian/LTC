@@ -814,20 +814,28 @@ export const FileSyncProvider: React.FC<FileSyncProviderProps> = ({
 		const signalingServersSetting = getSetting('collab-signaling-servers');
 		const awarenessTimeoutSetting = getSetting('collab-awareness-timeout');
 		const autoReconnectSetting = getSetting('collab-auto-reconnect');
+		const providerTypeSetting = getSetting('collab-provider-type');
+		const websocketServerSetting = getSetting('collab-websocket-server');
 
 		if (
 			!signalingServersSetting ||
 			!awarenessTimeoutSetting ||
-			!autoReconnectSetting
+			!autoReconnectSetting ||
+			!providerTypeSetting
 		) {
 			return;
 		}
 
 		try {
 			const { doc } = collabService.connect(projectId, 'file_sync', {
+				providerType:
+					(providerTypeSetting.value as string) === 'websocket'
+						? 'websocket'
+						: 'webrtc',
 				signalingServers: (signalingServersSetting.value as string)
 					.split(',')
 					.map((s) => s.trim()),
+				websocketServer: websocketServerSetting?.value as string | undefined,
 				autoReconnect: autoReconnectSetting.value as boolean,
 				awarenessTimeout: (awarenessTimeoutSetting.value as number) * 1000,
 			});
