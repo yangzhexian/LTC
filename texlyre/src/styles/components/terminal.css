@@ -44,6 +44,17 @@
   background: #f38ba8;
 }
 
+.agent-badge {
+  font-size: 0.6rem;
+  background: #2563eb;
+  color: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .terminal-cwd {
   font-size: 0.7rem;
   opacity: 0.5;

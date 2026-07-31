@@ -7,6 +7,8 @@ import '@xterm/xterm/css/xterm.css';
 import { fontSizeMap } from '../../contexts/EditorContext';
 import { useSettings } from '../../hooks/useSettings';
 import { useTheme } from '../../hooks/useTheme';
+import { fileStorageEventEmitter, fileStorageService } from '../../services/FileStorageService';
+import { isTemporaryFile } from '../../utils/fileUtils';
 
 interface TerminalPanelProps {
   className?: string;
@@ -72,7 +74,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const initialized = useRef(false);
+  const syncStarted = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [syncedFiles, setSyncedFiles] = useState(0);
 
   const { getSetting } = useSettings();
   const { isCurrentVariantDark } = useTheme();
@@ -88,6 +92,47 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
   const fontSetting = (getSetting('editor-font-size')?.value as string) || 'base';
   const fontSize = parseInt(fontSizeMap[fontSetting as keyof typeof fontSizeMap] || '14px', 10) || 14;
+
+  // ---- File sync: upload project files to server ----
+  const pushAllFiles = async (ws: WebSocket) => {
+    if (!projectId) return;
+    try {
+      const files = await fileStorageService.getAllFiles(true, true, true);
+      let count = 0;
+      for (const file of files) {
+        if (file.type !== 'file' || file.isDeleted || isTemporaryFile(file.path)) continue;
+        const content = file.content;
+        if (typeof content !== 'string') continue;
+        ws.send(JSON.stringify({ type: 'write-file', path: file.path, content }));
+        count++;
+      }
+      setSyncedFiles(count);
+      console.log(`[Agent] uploaded ${count} files to server`);
+    } catch (e) {
+      console.error('[Agent] upload failed', e);
+    }
+  };
+
+  // ---- File sync: apply server-side changes back to IndexedDB ----
+  const applyServerChange = async (relPath: string, content: string) => {
+    try {
+      const files = await fileStorageService.getAllFiles(true, false, false);
+      const target = files.find(
+        (f) => f.type === 'file' && f.path === relPath && !f.isDeleted,
+      );
+      if (!target) return;
+      await fileStorageService.updateFileContent(target.id, content);
+      fileStorageEventEmitter.emitChange();
+      document.dispatchEvent(
+        new CustomEvent('texlyre-agent-file-synced', {
+          detail: { path: relPath, content, fileId: target.id },
+        }),
+      );
+      console.log(`[Agent] applied server change to: ${relPath}`);
+    } catch (e) {
+      console.error('[Agent] apply server change failed', e);
+    }
+  };
 
   useEffect(() => {
     if (initialized.current) return;
@@ -117,28 +162,39 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     const ws = new WebSocket(effectiveWsUrl);
     wsRef.current = ws;
 
-    ws.onopen = () => {
+    ws.onopen = async () => {
       setIsConnected(true);
       term.clear();
+      term.write('\x1b[36m[Agent] connected to project directory\x1b[0m\r\n');
       if (cwd) {
         term.write(`\x1b[90mWorking in: ~/${cwd}\x1b[0m\r\n`);
       }
+      term.write('\x1b[90mRun agents like: codex\x1b[0m\r\n\r\n');
       term.focus();
+      // Upload project files to the server directory (once per mount)
+      if (!syncStarted.current) {
+        syncStarted.current = true;
+        await pushAllFiles(ws);
+      }
     };
 
     ws.onmessage = (event) => {
-      term.write(typeof event.data === 'string' ? event.data : '');
+      if (typeof event.data !== 'string') return;
+      // Terminal output from the pty arrives as raw text; JSON messages are control
+      if (event.data.startsWith('{')) {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'file-changed') {
+            applyServerChange(msg.path, msg.content);
+            return;
+          }
+        } catch {}
+      }
+      term.write(event.data);
     };
 
     ws.onclose = () => {
       setIsConnected(false);
-      term.write('\r\n\x1b[31mDisconnected — reconnecting...\x1b[0m\r\n');
-      // Auto-reconnect after 2s
-      setTimeout(() => {
-        if (termRef.current && !wsRef.current?.OPEN) {
-          window.location.reload();
-        }
-      }, 2000);
     };
 
     ws.onerror = () => {
@@ -165,12 +221,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     const resizeObserver = new ResizeObserver(() => onResize());
     if (containerRef.current) resizeObserver.observe(containerRef.current);
 
+    // ---- Push browser-side file changes to the server (user edits) ----
+    let pushTimer: ReturnType<typeof setTimeout> | null = null;
+    const onChange = () => {
+      if (pushTimer) clearTimeout(pushTimer);
+      pushTimer = setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) pushAllFiles(ws);
+      }, 1500);
+    };
+    const unsub = fileStorageEventEmitter.onChange(onChange);
+
     return () => {
       window.removeEventListener('resize', onResize);
       resizeObserver.disconnect();
+      unsub();
+      if (pushTimer) clearTimeout(pushTimer);
       ws.close();
       term.dispose();
       initialized.current = false;
+      syncStarted.current = false;
     };
   }, [effectiveWsUrl, cwd]);
 
@@ -200,10 +269,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     <div className={`terminal-panel ${className}`}>
       <div className='terminal-panel-header'>
         <span className='terminal-panel-title'>
-          Terminal
+          Terminal <span className='agent-badge'>Agent</span>
           <span className={`terminal-status ${isConnected ? 'connected' : 'disconnected'}`} />
         </span>
-        <span className='terminal-cwd'>{cwd ? `~/${cwd}` : ''}</span>
+        <span className='terminal-cwd'>
+          {cwd ? `~/${cwd}` : ''}
+          {syncedFiles > 0 ? ` · ${syncedFiles} files` : ''}
+        </span>
       </div>
       <div className='terminal-container' ref={containerRef} />
     </div>

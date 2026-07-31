@@ -1,6 +1,15 @@
 #!/usr/bin/env node
-// Terminal Server — WebSocket shell in the browser.
+// Terminal Server — WebSocket shell in the browser + bidirectional file sync.
 // Uses CommonJS so Node.js resolves node_modules from texlyre/ correctly.
+//
+// Protocol (JSON messages):
+//   client → server:
+//     {type:'input', data}            terminal keystrokes
+//     {type:'resize', cols, rows}     terminal resize
+//     {type:'write-file', path, content}  upload/update a project file
+//     {type:'delete-file', path}      delete a project file
+//   server → client:
+//     {type:'file-changed', path, content}  external change on disk (e.g. codex agent)
 //
 // Usage:  cd texlyre && node ../server/terminal-server.js [port]
 
@@ -58,6 +67,27 @@ const server = http.createServer((_req, res) => {
 
 const wss = new WebSocketServer({ server });
 
+// ---- File sync helpers ----
+function safeResolve(base, rel) {
+  const abs = path.resolve(base, rel);
+  if (abs !== base && !abs.startsWith(base + path.sep)) return null;
+  return abs;
+}
+
+// Self-written files: suppress echo broadcast
+const selfWrites = new Map(); // absPath → mtimeMs
+
+function writeFileSync(cwd, relPath, content) {
+  const abs = safeResolve(cwd, relPath);
+  if (!abs) return false;
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, content, 'utf8');
+  try {
+    selfWrites.set(abs, fs.statSync(abs).mtimeMs);
+  } catch {}
+  return true;
+}
+
 wss.on('connection', (ws, req) => {
   console.log(`  [terminal] connect (${wss.clients.size} active)`);
 
@@ -92,17 +122,63 @@ wss.on('connection', (ws, req) => {
     console.log(`  [terminal] exit code ${code}`);
   });
 
+  // ---- File sync: watch project dir for external changes (e.g. codex) ----
+  const watcher = fs.watch(cwd, { recursive: true }, (eventType, filename) => {
+    if (!filename || closed) return;
+    const relPath = filename.toString();
+    const abs = safeResolve(cwd, relPath);
+    if (!abs) return;
+
+    // Skip our own writes (echo suppression)
+    try {
+      const mtime = fs.statSync(abs).mtimeMs;
+      if (selfWrites.get(abs) === mtime) {
+        selfWrites.delete(abs);
+        return;
+      }
+    } catch { return; }
+
+    // Send changed file content back to the browser
+    try {
+      const content = fs.readFileSync(abs, 'utf8');
+      ws.send(JSON.stringify({ type: 'file-changed', path: relPath, content }));
+      console.log(`  [sync] file changed on disk: ${relPath}`);
+    } catch {}
+  });
+
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data.toString());
-      if (msg.type === 'input') term.write(msg.data);
-      if (msg.type === 'resize') term.resize(msg.cols, msg.rows);
+      switch (msg.type) {
+        case 'input':
+          term.write(msg.data);
+          break;
+        case 'resize':
+          term.resize(msg.cols, msg.rows);
+          break;
+        case 'write-file':
+          if (typeof msg.path === 'string' && typeof msg.content === 'string') {
+            writeFileSync(cwd, msg.path, msg.content);
+            console.log(`  [sync] wrote: ${msg.path}`);
+          }
+          break;
+        case 'delete-file':
+          if (typeof msg.path === 'string') {
+            const abs = safeResolve(cwd, msg.path);
+            if (abs && fs.existsSync(abs)) {
+              fs.unlinkSync(abs);
+              console.log(`  [sync] deleted: ${msg.path}`);
+            }
+          }
+          break;
+      }
     } catch {}
   });
 
   ws.on('close', () => {
     closed = true;
     term.kill();
+    try { watcher.close(); } catch {}
     console.log(`  [terminal] disconnect (${wss.clients.size - 1} active)`);
   });
 

@@ -514,12 +514,22 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 				/>
 			</div>
 
-			{showTerminal ? (
+			{/* Keep terminal mounted even when hidden, so agent sync stays alive */}
+			<div
+				className='terminal-tab-wrapper'
+				style={{
+					display: showTerminal ? 'contents' : 'none',
+					height: '100%',
+				}}
+			>
 				<TerminalPanel
 					className='output-terminal'
 					projectId={projectId}
 				/>
-			) : !compileLog && !hasAnyOutput ? (
+			</div>
+
+			{!showTerminal &&
+				(!compileLog && !hasAnyOutput ? (
 				<div className='empty-state'>
 					<p>
 						{t(
@@ -570,7 +580,7 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 						{outputViewerContent}
 					</div>
 				</>
-			)}
+			))}
 
 			{sourceMapAvailable && (
 				<SourceMapFloatingButton

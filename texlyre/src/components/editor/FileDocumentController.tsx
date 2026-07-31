@@ -832,6 +832,37 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 		};
 	}, []);
 
+	// Agent (terminal) sync: when the server-side agent modifies a file,
+	// refresh the open editor if it matches the currently open file.
+	useEffect(() => {
+		const handleAgentFileSynced = async (e: Event) => {
+			const detail = (e as CustomEvent).detail as
+				| { path?: string; fileId?: string; content?: string }
+				| undefined;
+			if (!detail?.path) return;
+
+			if (currentFilePath === detail.path && selectedFileId) {
+				try {
+					const refreshed = await getFileContent(selectedFileId);
+					if (typeof refreshed === 'string') {
+						setLoadedFile({ fileId: selectedFileId, content: refreshed });
+						setCurrentEditorContent(refreshed);
+					} else if (refreshed instanceof ArrayBuffer) {
+						const text = new TextDecoder().decode(refreshed);
+						setLoadedFile({ fileId: selectedFileId, content: text });
+						setCurrentEditorContent(text);
+					}
+				} catch (error) {
+					moduleLog.error('Error refreshing file after agent sync:', error);
+				}
+			}
+		};
+
+		document.addEventListener('texlyre-agent-file-synced', handleAgentFileSynced);
+		return () =>
+			document.removeEventListener('texlyre-agent-file-synced', handleAgentFileSynced);
+	}, [currentFilePath, selectedFileId, getFileContent]);
+
 	useEffect(() => {
 		const handleOpenSearchPanel = () => {
 			setActiveView('search');
