@@ -17,6 +17,19 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 // src/main.tsx
+// ---- Secure-context polyfills ----
+// crypto.randomUUID / crypto.subtle are unavailable on plain HTTP origins
+// (e.g. http://192.168.x.x:8080). Polyfill so registration/login work anywhere.
+if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
+	(crypto as unknown as { randomUUID: () => string }).randomUUID = () => {
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+			const r = (Math.random() * 16) | 0;
+			const v = c === 'x' ? r : (r & 0x3) | 0x8;
+			return v.toString(16);
+		});
+	};
+}
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { openDB } from 'idb';
