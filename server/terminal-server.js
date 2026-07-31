@@ -75,6 +75,33 @@ const server = http.createServer((_req, res) => {
 
 const wss = new WebSocketServer({ server });
 
+// ---- Track connections per working directory (for cross-client file sync) ----
+const activeConnections = new Set(); // { ws, cwd }
+
+function broadcastToProject(cwd, message, excludeWs) {
+  for (const conn of activeConnections) {
+    if (conn.ws !== excludeWs && conn.cwd === cwd && conn.ws.readyState === 1) {
+      conn.ws.send(message);
+    }
+  }
+}
+
+// File content encoding helpers (mirror of the browser's TEXT_EXTENSIONS)
+const FILE_TEXT_EXTENSIONS = new Set([
+  'tex', 'bib', 'sty', 'cls', 'txt', 'md', 'log', 'aux', 'cfg', 'def',
+  'lst', 'py', 'sh', 'json', 'yml', 'yaml', 'csv', 'xml', 'html', 'css', 'js',
+  'out', 'toc', 'fdb_latexmk', 'fls', 'blg', 'bbl', 'nav', 'snm', 'vrb', 'xdv',
+]);
+
+function encodeFileChangeMessage(abs, relPath) {
+  const buf = fs.readFileSync(abs);
+  const ext = relPath.split('.').pop()?.toLowerCase() || '';
+  if (FILE_TEXT_EXTENSIONS.has(ext)) {
+    return JSON.stringify({ type: 'file-changed', path: relPath, content: buf.toString('utf8') });
+  }
+  return JSON.stringify({ type: 'file-changed', path: relPath, content: buf.toString('base64'), encoding: 'base64' });
+}
+
 // ---- File sync helpers ----
 const TEXT_EXTENSIONS = new Set([
   'tex', 'bib', 'sty', 'cls', 'txt', 'md', 'log', 'aux', 'cfg', 'def',
@@ -129,6 +156,7 @@ wss.on('connection', (ws, req) => {
   } catch {}
 
   console.log(`  [terminal] cwd: ${cwd}`);
+  activeConnections.add({ ws, cwd });
   const term = spawnPty(cwd);
   let closed = false;
 
@@ -149,14 +177,8 @@ wss.on('connection', (ws, req) => {
   const pushFileChange = (abs, relPath) => {
     if (closed) return;
     try {
-      const buf = fs.readFileSync(abs);
-      const ext = relPath.split('.').pop()?.toLowerCase() || '';
-      if (TEXT_EXTENSIONS.has(ext)) {
-        ws.send(JSON.stringify({ type: 'file-changed', path: relPath, content: buf.toString('utf8') }));
-      } else {
-        // Binary file: send as base64 so the browser keeps pristine bytes
-        ws.send(JSON.stringify({ type: 'file-changed', path: relPath, content: buf.toString('base64'), encoding: 'base64' }));
-      }
+      // Broadcast to ALL browsers in this project (agent changes are shared)
+      broadcastToProject(cwd, encodeFileChangeMessage(abs, relPath), null);
       console.log(`  [sync] file changed on disk: ${relPath}`);
     } catch {}
   };
@@ -213,6 +235,16 @@ wss.on('connection', (ws, req) => {
           if (typeof msg.path === 'string' && typeof msg.content === 'string') {
             const ok = writeFileSync(cwd, msg.path, msg.content, msg.encoding);
             console.log(`  [sync] ${ok ? 'wrote' : 'REJECTED'}: ${msg.path}`);
+            if (ok) {
+              // Cross-client sync: broadcast the file to OTHER browsers in the
+              // same project (the writing browser already has it).
+              try {
+                const abs = safeResolve(cwd, msg.path);
+                if (abs) {
+                  broadcastToProject(cwd, encodeFileChangeMessage(abs, msg.path.replace(/^\/+/, '')), ws);
+                }
+              } catch {}
+            }
           }
           break;
         case 'delete-file':
@@ -234,6 +266,12 @@ wss.on('connection', (ws, req) => {
     try { watcher.close(); } catch {}
     for (const timer of pendingPushes.values()) clearTimeout(timer);
     pendingPushes.clear();
+    for (const conn of activeConnections) {
+      if (conn.ws === ws) {
+        activeConnections.delete(conn);
+        break;
+      }
+    }
     console.log(`  [terminal] disconnect (${wss.clients.size - 1} active)`);
   });
 
