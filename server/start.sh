@@ -67,19 +67,29 @@ fi
 # ---- Kill previous session ----
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
-# ---- Start services in tmux ----
-tmux new-session -d -s "$SESSION" -n "texlyre" \; \
-  send-keys "cd texlyre && node scripts/pm.cjs vite preview --port $PORT_HTTP --host 0.0.0.0 --strictPort" Enter
+# ---- Start services in tmux (command passed directly, no send-keys quoting) ----
+tmux new-session -d -s "$SESSION" \
+  "cd texlyre && node scripts/pm.cjs vite preview --port $PORT_HTTP --host 0.0.0.0 --strictPort"
 
 sleep 1
 
-tmux new-window -t "$SESSION" -n "yjs-ws" \; \
-  send-keys "NODE_PATH=$(pwd)/texlyre/node_modules node server/yjs-ws-server.js $PORT_WS" Enter
+tmux new-window -t "$SESSION" \
+  "NODE_PATH=$PWD/texlyre/node_modules node server/yjs-ws-server.js $PORT_WS"
 
 sleep 0.5
 
-tmux new-window -t "$SESSION" -n "terminal" \; \
-  send-keys "NODE_PATH=$(pwd)/texlyre/node_modules node server/terminal-server.js $PORT_TERM" Enter
+tmux new-window -t "$SESSION" \
+  "NODE_PATH=$PWD/texlyre/node_modules node server/terminal-server.js $PORT_TERM"
+
+# ---- Verify services are listening ----
+sleep 2
+for port in "$PORT_HTTP" "$PORT_WS" "$PORT_TERM"; do
+  if ss -tln 2>/dev/null | grep -q ":$port "; then
+    echo "  ✓ port $port is LISTENING"
+  else
+    echo "  ✗ port $port NOT listening — check tmux window output"
+  fi
+done
 
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
