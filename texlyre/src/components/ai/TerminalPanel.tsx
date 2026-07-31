@@ -130,19 +130,55 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     }
   };
 
+  // Convert ArrayBuffer → base64 (chunked, safe for large files)
+  const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  };
+
+  const TEXT_EXTENSIONS = new Set([
+    'tex', 'bib', 'sty', 'cls', 'txt', 'md', 'log', 'aux', 'cfg', 'def',
+    'lst', 'py', 'sh', 'json', 'yml', 'yaml', 'csv', 'xml', 'html', 'css', 'js',
+  ]);
+
   const pushAllFiles = async (ws: WebSocket) => {
     if (!projectId) return;
     try {
       const files = await fileStorageService.getAllFiles(true, true, true);
-      console.log('[Agent][debug] getAllFiles:', files.length,
-        files.map((f) => `${f.name}(type=${f.type},del=${!!f.isDeleted},content=${typeof f.content})`));
       const uploadedPaths = new Set<string>();
       let count = 0;
       for (const file of files) {
         if (file.type !== 'file' || file.isDeleted || isTemporaryFile(file.path)) continue;
-        const content = file.content;
-        if (typeof content !== 'string') continue;
-        ws.send(JSON.stringify({ type: 'write-file', path: file.path, content }));
+        const raw = file.content;
+        if (raw === undefined) continue;
+        const ext = file.path.split('.').pop()?.toLowerCase() || '';
+        if (typeof raw === 'string') {
+          ws.send(JSON.stringify({ type: 'write-file', path: file.path, content: raw }));
+        } else if (raw instanceof ArrayBuffer) {
+          const isText = TEXT_EXTENSIONS.has(ext);
+          if (isText) {
+            ws.send(JSON.stringify({
+              type: 'write-file',
+              path: file.path,
+              content: new TextDecoder().decode(raw),
+            }));
+          } else {
+            // Binary file: upload as base64 so agents can use figures
+            ws.send(JSON.stringify({
+              type: 'write-file',
+              path: file.path,
+              content: arrayBufferToBase64(raw),
+              encoding: 'base64',
+            }));
+          }
+        } else {
+          continue;
+        }
         uploadedPaths.add(file.path);
         count++;
       }

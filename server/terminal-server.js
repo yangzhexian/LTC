@@ -85,11 +85,15 @@ function safeResolve(base, rel) {
 // Self-written files: suppress echo broadcast
 const selfWrites = new Map(); // absPath → mtimeMs
 
-function writeFileSync(cwd, relPath, content) {
+function writeFileSync(cwd, relPath, content, encoding) {
   const abs = safeResolve(cwd, relPath);
   if (!abs) return false;
   fs.mkdirSync(path.dirname(abs), { recursive: true });
-  fs.writeFileSync(abs, content, 'utf8');
+  if (encoding === 'base64') {
+    fs.writeFileSync(abs, Buffer.from(content, 'base64'));
+  } else {
+    fs.writeFileSync(abs, content, 'utf8');
+  }
   try {
     selfWrites.set(abs, fs.statSync(abs).mtimeMs);
   } catch {}
@@ -166,7 +170,7 @@ wss.on('connection', (ws, req) => {
           break;
         case 'write-file':
           if (typeof msg.path === 'string' && typeof msg.content === 'string') {
-            writeFileSync(cwd, msg.path, msg.content);
+            writeFileSync(cwd, msg.path, msg.content, msg.encoding);
             console.log(`  [sync] wrote: ${msg.path}`);
           }
           break;
