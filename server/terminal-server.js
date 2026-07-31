@@ -77,7 +77,9 @@ const wss = new WebSocketServer({ server });
 
 // ---- File sync helpers ----
 function safeResolve(base, rel) {
-  const abs = path.resolve(base, rel);
+  // Client paths look like "/jrnl.tex" — strip leading slashes, treat as relative
+  const clean = String(rel).replace(/^\/+/, '');
+  const abs = path.resolve(base, clean);
   if (abs !== base && !abs.startsWith(base + path.sep)) return null;
   return abs;
 }
@@ -170,8 +172,8 @@ wss.on('connection', (ws, req) => {
           break;
         case 'write-file':
           if (typeof msg.path === 'string' && typeof msg.content === 'string') {
-            writeFileSync(cwd, msg.path, msg.content, msg.encoding);
-            console.log(`  [sync] wrote: ${msg.path}`);
+            const ok = writeFileSync(cwd, msg.path, msg.content, msg.encoding);
+            console.log(`  [sync] ${ok ? 'wrote' : 'REJECTED'}: ${msg.path}`);
           }
           break;
         case 'delete-file':

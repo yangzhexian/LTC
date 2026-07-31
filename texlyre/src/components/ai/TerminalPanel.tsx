@@ -226,6 +226,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   };
 
   useEffect(() => {
+    // Re-initialize if the working directory changes (e.g. projectId loaded late)
+    if (initialized.current) {
+      const prevCwd = (termRef.current as unknown as { __cwd?: string })?.__cwd;
+      if (prevCwd !== cwd) {
+        initialized.current = false;
+      }
+    }
     if (initialized.current) return;
     initialized.current = true;
 
@@ -249,6 +256,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     }
 
     termRef.current = term;
+    (term as unknown as { __cwd?: string }).__cwd = cwd;
 
     let ws: WebSocket | null = null;
     let closed = false;
@@ -346,7 +354,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       initialized.current = false;
       syncStarted.current = false;
     };
-  }, [effectiveWsUrl, cwd]);
+  }, [effectiveWsUrl, cwd, projectId]);
 
   // Apply theme changes (light/dark only)
   useEffect(() => {
