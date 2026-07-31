@@ -47,8 +47,11 @@ if [ ! -d "texlyre/node_modules" ]; then
   (cd texlyre && npm install)
 fi
 
-# Apply server settings (WebSocket mode)
+# Apply server settings (WebSocket mode) with the real server IP
+HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 cp texlyre/userdata.server.json texlyre/userdata.local.json
+sed -i "s/__HOST_IP__/$HOST_IP/g" texlyre/userdata.local.json
+echo "Server config: collab websocket = ws://$HOST_IP:$PORT_WS"
 
 # ---- Build (full pipeline: generate:plugins + tsc + vite build) ----
 BUILD_MARKER="texlyre/dist/.ltc-build-v2"

@@ -2,8 +2,9 @@
   "version": "1.2.1",
   "settings": {
     "collab-provider-type": "websocket",
-    "collab-websocket-server": "ws://localhost:8082",
+    "collab-websocket-server": "ws://__HOST_IP__:8082",
     "collab-signaling-servers": "",
+    "file-sync-server-url": "",
     "collab-auto-reconnect": true,
     "collab-awareness-timeout": 30,
     "editor-auto-save-delay": 1000,
