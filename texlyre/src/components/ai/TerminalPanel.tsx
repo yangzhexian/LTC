@@ -166,10 +166,17 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       let count = 0;
       for (const file of files) {
         if (file.type !== 'file') continue;
-        if (!file.isDeleted && !isTemporaryFile(file.path)) {
-          alivePaths.add(file.path);
+        // File deleted locally → delete it on the server too (idempotent).
+        // This runs on EVERY push, so it works regardless of snapshot timing.
+        if (file.isDeleted) {
+          ws.send(JSON.stringify({ type: 'delete-file', path: file.path }));
+          uploadedContent.current.delete(file.path);
+          lastSeenPaths.current.delete(file.path);
+          console.log(`[Agent] deleted on server: ${file.path}`);
+          continue;
         }
-        if (file.isDeleted || isTemporaryFile(file.path)) continue;
+        if (isTemporaryFile(file.path)) continue;
+        alivePaths.add(file.path);
         const raw = file.content;
         if (raw === undefined) continue;
         const ext = file.path.split('.').pop()?.toLowerCase() || '';
@@ -199,7 +206,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         lastSeenSeeded = true;
       }
 
-      // Detect files deleted locally → delete them on the server
+      // Detect files removed entirely from IndexedDB (physically deleted)
       for (const path of lastSeenPaths.current) {
         if (!alivePaths.has(path)) {
           ws.send(JSON.stringify({ type: 'delete-file', path }));
