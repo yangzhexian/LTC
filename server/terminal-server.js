@@ -24,6 +24,14 @@ const { WebSocketServer } = require('ws');
 const PORT = parseInt(process.argv[2] || '8084', 10);
 const DEFAULT_CWD = path.resolve(process.argv[3] || '.');
 
+// Never crash the process on unhandled errors — log and keep serving
+process.on('uncaughtException', (err) => {
+  console.error('  [crash] uncaughtException:', err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('  [crash] unhandledRejection:', err);
+});
+
 // ---- Try node-pty, fall back to raw spawn ----
 let spawnPty;
 try {

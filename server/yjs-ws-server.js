@@ -18,6 +18,14 @@ const awarenessProtocol = require('y-protocols/awareness');
 const PORT = parseInt(process.argv[2] || '8082', 10);
 const PERSIST_DIR = path.join(__dirname, '..', '.yjs-data');
 
+// Never crash the process on unhandled errors — log and keep serving
+process.on('uncaughtException', (err) => {
+  console.error('  [crash] uncaughtException:', err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('  [crash] unhandledRejection:', err);
+});
+
 // message types (from y-protocols)
 const messageSync = 0;
 const messageAwareness = 1;

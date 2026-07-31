@@ -74,20 +74,38 @@ fi
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 # ---- Start services in tmux (command passed directly, no send-keys quoting) ----
-tmux new-session -d -s "$SESSION" \
+tmux new-session -d -s "$SESSION" -n "texlyre" \
   "cd texlyre && node scripts/pm.cjs vite preview --port $PORT_HTTP --host 0.0.0.0 --strictPort"
 
 sleep 1
 
-tmux new-window -t "$SESSION" \
+tmux new-window -t "$SESSION" -n "yjs-ws" \
   "NODE_PATH=$PWD/texlyre/node_modules node server/yjs-ws-server.js $PORT_WS"
 
 sleep 0.5
 
-tmux new-window -t "$SESSION" \
+tmux new-window -t "$SESSION" -n "terminal" \
   "NODE_PATH=$PWD/texlyre/node_modules node server/terminal-server.js $PORT_TERM"
 
+# ---- Keep crashed windows visible + self-heal ----
+tmux set-option -t "$SESSION" remain-on-exit on
 sleep 2
+
+for attempt in 1 2; do
+  WS_UP=$(ss -tln 2>/dev/null | grep -c ":$PORT_WS ")
+  TERM_UP=$(ss -tln 2>/dev/null | grep -c ":$PORT_TERM ")
+  if [ "$WS_UP" = "0" ] || [ "$TERM_UP" = "0" ]; then
+    echo "  [heal] restarting dead services (attempt $attempt)..."
+    tmux kill-window -t "$SESSION:yjs-ws" 2>/dev/null || true
+    tmux kill-window -t "$SESSION:terminal" 2>/dev/null || true
+    tmux new-window -t "$SESSION" -n "yjs-ws" \
+      "NODE_PATH=$PWD/texlyre/node_modules node server/yjs-ws-server.js $PORT_WS"
+    sleep 0.5
+    tmux new-window -t "$SESSION" -n "terminal" \
+      "NODE_PATH=$PWD/texlyre/node_modules node server/terminal-server.js $PORT_TERM"
+    sleep 2
+  fi
+done
 
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
