@@ -191,8 +191,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           const path = doc.name;
           if (uploadedPaths.has(path)) continue;
           const content = await getDocumentContent(docUrl, doc.id);
-          console.log(`[Agent][debug] doc "${doc.name}" content len:`, content.length);
           if (!content) continue;
+          // Skip if unchanged since last upload (prevents sync loops)
+          if (uploadedContent.current.get(path) === content) continue;
+          uploadedContent.current.set(path, content);
           ws.send(JSON.stringify({ type: 'write-file', path, content }));
           count++;
         }
@@ -213,6 +215,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     try {
       const cleanPath = relPath.replace(/^\/+/, '');
       const texlyrePath = `/${cleanPath}`;
+      // Echo guard: skip if we've already seen this exact content
+      // (prevents server broadcasts from re-triggering local uploads)
+      if (uploadedContent.current.get(texlyrePath) === content) {
+        return;
+      }
       // Binary files arrive as base64 — decode to pristine bytes
       const payload: string | ArrayBuffer = encoding === 'base64'
         ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0)).buffer
