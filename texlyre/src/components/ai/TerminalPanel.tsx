@@ -201,57 +201,69 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     termRef.current = term;
 
-    const ws = new WebSocket(effectiveWsUrl);
-    wsRef.current = ws;
+    let ws: WebSocket | null = null;
+    let closed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    ws.onopen = async () => {
-      setIsConnected(true);
-      term.clear();
-      term.write('\x1b[36m[Agent] connected to project directory\x1b[0m\r\n');
-      if (cwd) {
-        term.write(`\x1b[90mWorking in: ~/${cwd}\x1b[0m\r\n`);
-      }
-      term.write('\x1b[90mRun agents like: codex\x1b[0m\r\n\r\n');
-      term.focus();
-      // Upload project files to the server directory (once per mount)
-      if (!syncStarted.current) {
-        syncStarted.current = true;
-        await pushAllFiles(ws);
-      }
+    const connect = () => {
+      if (closed) return;
+      ws = new WebSocket(effectiveWsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = async () => {
+        setIsConnected(true);
+        term.write('\x1b[36m[Agent] connected to project directory\x1b[0m\r\n');
+        if (cwd) {
+          term.write(`\x1b[90mWorking in: ~/${cwd}\x1b[0m\r\n`);
+        }
+        term.write('\x1b[90mRun agents like: codex\x1b[0m\r\n\r\n');
+        term.focus();
+        // Upload project files to the server directory (once per mount)
+        if (!syncStarted.current) {
+          syncStarted.current = true;
+          await pushAllFiles(ws);
+        }
+      };
+
+      ws.onmessage = (event) => {
+        if (typeof event.data !== 'string') return;
+        // Terminal output from the pty arrives as raw text; JSON messages are control
+        if (event.data.startsWith('{')) {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'file-changed') {
+              applyServerChange(msg.path, msg.content);
+              return;
+            }
+          } catch {}
+        }
+        term.write(event.data);
+      };
+
+      ws.onclose = () => {
+        setIsConnected(false);
+        if (!closed) {
+          term.write('\r\n\x1b[31mDisconnected — reconnecting...\x1b[0m\r\n');
+          reconnectTimer = setTimeout(connect, 2000);
+        }
+      };
+
+      ws.onerror = () => {
+        term.write('\r\n\x1b[31mConnection error\x1b[0m\r\n');
+      };
+
+      term.onData((data) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input', data }));
+        }
+      });
     };
 
-    ws.onmessage = (event) => {
-      if (typeof event.data !== 'string') return;
-      // Terminal output from the pty arrives as raw text; JSON messages are control
-      if (event.data.startsWith('{')) {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'file-changed') {
-            applyServerChange(msg.path, msg.content);
-            return;
-          }
-        } catch {}
-      }
-      term.write(event.data);
-    };
-
-    ws.onclose = () => {
-      setIsConnected(false);
-    };
-
-    ws.onerror = () => {
-      term.write('\r\n\x1b[31mConnection error\x1b[0m\r\n');
-    };
-
-    term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'input', data }));
-      }
-    });
+    connect();
 
     const onResize = () => {
       try { fit.fit(); } catch {}
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         const dims = fit.proposeDimensions();
         if (dims) {
           ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
@@ -268,17 +280,19 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     const onChange = () => {
       if (pushTimer) clearTimeout(pushTimer);
       pushTimer = setTimeout(() => {
-        if (ws.readyState === WebSocket.OPEN) pushAllFiles(ws);
+        if (ws && ws.readyState === WebSocket.OPEN) pushAllFiles(ws);
       }, 1500);
     };
     const unsub = fileStorageEventEmitter.onChange(onChange);
 
     return () => {
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       window.removeEventListener('resize', onResize);
       resizeObserver.disconnect();
       unsub();
       if (pushTimer) clearTimeout(pushTimer);
-      ws.close();
+      if (ws) ws.close();
       term.dispose();
       initialized.current = false;
       syncStarted.current = false;
