@@ -134,6 +134,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     if (!projectId) return;
     try {
       const files = await fileStorageService.getAllFiles(true, true, true);
+      console.log('[Agent][debug] getAllFiles:', files.length,
+        files.map((f) => `${f.name}(type=${f.type},del=${!!f.isDeleted},content=${typeof f.content})`));
       const uploadedPaths = new Set<string>();
       let count = 0;
       for (const file of files) {
@@ -147,11 +149,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       // Upload Yjs documents that aren't already represented as files
       const docs = documentsRef.current || [];
       const docUrl = docUrlRef.current;
+      console.log('[Agent][debug] documents prop:', docs.length, 'docUrl:', docUrl);
       if (docs.length > 0 && docUrl) {
         for (const doc of docs) {
           const path = doc.name;
           if (uploadedPaths.has(path)) continue;
           const content = await getDocumentContent(docUrl, doc.id);
+          console.log(`[Agent][debug] doc "${doc.name}" content len:`, content.length);
           if (!content) continue;
           ws.send(JSON.stringify({ type: 'write-file', path, content }));
           count++;
