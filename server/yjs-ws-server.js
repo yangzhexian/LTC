@@ -120,6 +120,18 @@ wss.on('connection', (ws, req) => {
     broadcast(docId, encoding.toUint8Array(encoder), ws);
   });
 
+  // Ask the client for its state (sync step 1).
+  // CRITICAL: the y-websocket client only uploads its local state (step 2)
+  // in response to a step 1 from the server. Without this, clients with
+  // pre-existing local state (e.g. project metadata) never push it to the
+  // server, so new collaborators see an empty document.
+  try {
+    const encoder = encoding.createEncoder();
+    encoding.writeVarUint(encoder, messageSync);
+    syncProtocol.writeSyncStep1(encoder, doc);
+    ws.send(encoding.toUint8Array(encoder));
+  } catch {}
+
   // Handle incoming messages (official y-websocket protocol)
   ws.on('message', (message) => {
     const encoder = encoding.createEncoder();
