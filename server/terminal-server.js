@@ -139,6 +139,7 @@ function safeResolve(base, rel) {
 
 // Self-written files: suppress echo broadcast
 const selfWrites = new Map(); // absPath → mtimeMs
+const selfDeletes = new Set(); // absPath deleted by our own delete-file handler
 
 function writeFileSync(cwd, relPath, content, encoding) {
   const abs = safeResolve(cwd, relPath);
@@ -230,6 +231,21 @@ wss.on('connection', (ws, req) => {
     if (!abs) return;
     if (isTempFile(relPath)) return;
 
+    // File deleted on disk (external, e.g. agent rm) → tell browsers to remove it
+    if (!fs.existsSync(abs)) {
+      if (selfDeletes.has(abs)) {
+        selfDeletes.delete(abs);
+        return;
+      }
+      broadcastToProject(
+        cwd,
+        JSON.stringify({ type: 'file-deleted', path: relPath }),
+        null,
+      );
+      console.log(`  [sync] file deleted on disk: ${relPath}`);
+      return;
+    }
+
     // Echo suppression: skip events whose mtime is <= our last self-write.
     // IMPORTANT: do NOT delete the selfWrites entry — multiple watchers
     // (one per connected browser) may process the same event; deleting the
@@ -242,7 +258,6 @@ wss.on('connection', (ws, req) => {
         return;
       }
     } catch {
-      // File may be deleted or mid-write (rename events) — ignore
       return;
     }
 
@@ -287,6 +302,7 @@ wss.on('connection', (ws, req) => {
           if (typeof msg.path === 'string') {
             const abs = safeResolve(cwd, msg.path);
             if (abs && fs.existsSync(abs)) {
+              selfDeletes.add(abs);
               fs.unlinkSync(abs);
               console.log(`  [sync] deleted: ${msg.path}`);
             }

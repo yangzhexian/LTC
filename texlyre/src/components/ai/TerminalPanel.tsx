@@ -154,15 +154,22 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
   // Cache of last uploaded content per path — only push files that changed
   const uploadedContent = useRef<Map<string, string>>(new Map());
+  // Last known set of file paths (for detecting local deletions)
+  const lastSeenPaths = useRef<Set<string>>(new Set());
+  let lastSeenSeeded = false;
 
   const pushAllFiles = async (ws: WebSocket) => {
     if (!projectId) return;
     try {
       const files = await fileStorageService.getAllFiles(true, true, true);
-      const uploadedPaths = new Set<string>();
+      const alivePaths = new Set<string>();
       let count = 0;
       for (const file of files) {
-        if (file.type !== 'file' || file.isDeleted || isTemporaryFile(file.path)) continue;
+        if (file.type !== 'file') continue;
+        if (!file.isDeleted && !isTemporaryFile(file.path)) {
+          alivePaths.add(file.path);
+        }
+        if (file.isDeleted || isTemporaryFile(file.path)) continue;
         const raw = file.content;
         if (raw === undefined) continue;
         const ext = file.path.split('.').pop()?.toLowerCase() || '';
@@ -185,8 +192,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           content,
           encoding: typeof raw === 'string' || TEXT_EXTENSIONS.has(ext) ? undefined : 'base64',
         }));
-        uploadedPaths.add(file.path);
         count++;
+      }
+      if (!lastSeenSeeded) {
+        lastSeenPaths.current = new Set(alivePaths);
+        lastSeenSeeded = true;
+      }
+
+      // Detect files deleted locally → delete them on the server
+      for (const path of lastSeenPaths.current) {
+        if (!alivePaths.has(path)) {
+          ws.send(JSON.stringify({ type: 'delete-file', path }));
+          uploadedContent.current.delete(path);
+          lastSeenPaths.current.delete(path);
+          console.log(`[Agent] deleted on server: ${path}`);
+        }
       }
       // Upload Yjs documents that aren't already represented as files
       const docs = documentsRef.current || [];
@@ -210,6 +230,27 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       console.log(`[Agent] uploaded ${count} files to server`);
     } catch (e) {
       console.error('[Agent] upload failed', e);
+    }
+  };
+
+  // ---- File sync: remove a file locally when it was deleted on the server ----
+  const handleServerDelete = async (relPath: string) => {
+    try {
+      const cleanPath = relPath.replace(/^\/+/, '');
+      const texlyrePath = `/${cleanPath}`;
+      uploadedContent.current.delete(texlyrePath);
+      lastSeenPaths.current.delete(texlyrePath);
+      const files = await fileStorageService.getAllFiles(true, false, false);
+      const target = files.find(
+        (f) => f.type === 'file' && f.path === texlyrePath,
+      );
+      if (target && !target.isDeleted) {
+        await fileStorageService.deleteFileByPath(texlyrePath);
+        fileStorageEventEmitter.emitChange();
+        console.log(`[Agent] removed local file (deleted on server): ${texlyrePath}`);
+      }
+    } catch (e) {
+      console.error('[Agent] remove local file failed', e);
     }
   };
 
@@ -440,6 +481,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             const msg = JSON.parse(event.data);
             if (msg.type === 'file-changed') {
               applyServerChange(msg.path, msg.content, msg.encoding);
+              return;
+            }
+            if (msg.type === 'file-deleted') {
+              handleServerDelete(msg.path);
               return;
             }
           } catch {}
