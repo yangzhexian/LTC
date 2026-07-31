@@ -7,12 +7,13 @@
 const { spawn } = require('node:child_process');
 const http = require('node:http');
 const path = require('node:path');
-const { homedir, hostname, EOL } = require('node:os');
+const fs = require('node:fs');
+const os = require('node:os');
 
 const { WebSocketServer } = require('ws');
 
 const PORT = parseInt(process.argv[2] || '8084', 10);
-const CWD = path.resolve(process.argv[3] || '.');
+const DEFAULT_CWD = path.resolve(process.argv[3] || '.');
 
 // ---- Try node-pty, fall back to raw spawn ----
 let spawnPty;
@@ -57,10 +58,28 @@ const server = http.createServer((_req, res) => {
 
 const wss = new WebSocketServer({ server });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   console.log(`  [terminal] connect (${wss.clients.size} active)`);
 
-  const term = spawnPty(CWD);
+  // Client can request a working directory via ?cwd= query param
+  // Relative paths are resolved against $HOME (e.g. "Projects/<projectId>")
+  let cwd = DEFAULT_CWD;
+  try {
+    const url = new URL(req.url || '/', `http://${req.headers.host}`);
+    const requested = url.searchParams.get('cwd');
+    if (requested) {
+      cwd = path.isAbsolute(requested)
+        ? path.resolve(requested)
+        : path.join(os.homedir(), requested);
+      if (!fs.existsSync(cwd)) {
+        fs.mkdirSync(cwd, { recursive: true });
+        console.log(`  [terminal] created cwd: ${cwd}`);
+      }
+    }
+  } catch {}
+
+  console.log(`  [terminal] cwd: ${cwd}`);
+  const term = spawnPty(cwd);
   let closed = false;
 
   term.onData((data) => {
@@ -92,6 +111,6 @@ wss.on('connection', (ws) => {
 
 server.listen(PORT, () => {
   console.log(`\nTerminal server running on ws://0.0.0.0:${PORT}`);
-  console.log(`  CWD: ${CWD}`);
+  console.log(`  Default cwd: ${DEFAULT_CWD}`);
   console.log();
 });

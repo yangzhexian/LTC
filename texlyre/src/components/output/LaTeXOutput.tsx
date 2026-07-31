@@ -22,6 +22,7 @@ import type { FileNode } from '../../types/files';
 import ResizablePanel from '../common/ResizablePanel';
 import LaTeXCompileButton from './LaTeXCompileButton';
 import SourceMapFloatingButton from './SourceMapFloatingButton';
+import TerminalPanel from '../ai/TerminalPanel';
 import {
 	isLatexFile,
 	isLatexMainFile,
@@ -84,6 +85,7 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 	const [visualizerHeight, setVisualizerHeight] = useState(300);
 	const [visualizerCollapsed, setVisualizerCollapsed] = useState(false);
 	const [autoMainFile, setAutoMainFile] = useState<string | undefined>();
+	const [showTerminal, setShowTerminal] = useState(false);
 
 	const settingFormat =
 		(getSetting('latex-default-format')?.value as LaTeXOutputFormat) ?? 'pdf';
@@ -453,8 +455,11 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 			<div className='output-header'>
 				<div className='view-tabs'>
 					<button
-						className={`tab-button ${currentView === 'log' ? 'active' : ''}`}
-						onClick={() => currentView !== 'log' && toggleOutputView()}
+						className={`tab-button ${showTerminal ? '' : currentView === 'log' ? 'active' : ''}`}
+						onClick={() => {
+							setShowTerminal(false);
+							if (currentView !== 'log') toggleOutputView();
+						}}
 					>
 						<div
 							className='status-dot'
@@ -467,22 +472,28 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 						<>
 							<button
 								className={`tab-button ${
-									currentView === 'output' && effectiveFormat === 'pdf'
+									!showTerminal && currentView === 'output' && effectiveFormat === 'pdf'
 										? 'active'
 										: ''
 								}`}
-								onClick={() => handleTabSwitch('pdf')}
+								onClick={() => {
+									setShowTerminal(false);
+									handleTabSwitch('pdf');
+								}}
 							>
 								{t('PDF')}
 							</button>
 
 							<button
 								className={`tab-button ${
-									currentView === 'output' && effectiveFormat === 'canvas-pdf'
+									!showTerminal && currentView === 'output' && effectiveFormat === 'canvas-pdf'
 										? 'active'
 										: ''
 								}`}
-								onClick={() => handleTabSwitch('canvas-pdf')}
+								onClick={() => {
+									setShowTerminal(false);
+									handleTabSwitch('canvas-pdf');
+								}}
 							>
 								{t('Canvas (PDF)')}
 							</button>
@@ -491,13 +502,23 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 
 					{currentView === 'log' && (
 						<button
-							className='tab-button'
-							onClick={() => toggleOutputView()}
+							className={`tab-button ${!showTerminal ? 'active' : ''}`}
+							onClick={() => {
+								setShowTerminal(false);
+								toggleOutputView();
+							}}
 							disabled={!hasAnyOutput}
 						>
 							{t('Output')}
 						</button>
 					)}
+
+					<button
+						className={`tab-button ${showTerminal ? 'active' : ''}`}
+						onClick={() => setShowTerminal(!showTerminal)}
+					>
+						{t('Terminal')}
+					</button>
 				</div>
 
 				<LaTeXCompileButton
@@ -512,7 +533,12 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 				/>
 			</div>
 
-			{!compileLog && !hasAnyOutput ? (
+			{showTerminal ? (
+				<TerminalPanel
+					className='output-terminal'
+					projectId={projectId}
+				/>
+			) : !compileLog && !hasAnyOutput ? (
 				<div className='empty-state'>
 					<p>
 						{t(

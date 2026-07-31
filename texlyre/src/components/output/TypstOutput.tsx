@@ -14,6 +14,7 @@ import type { RendererController } from '../../plugins/PluginInterface';
 import type { FileNode } from '../../types/files';
 import ResizablePanel from '../common/ResizablePanel';
 import TypstCompileButton from './TypstCompileButton';
+import TerminalPanel from '../ai/TerminalPanel';
 import type { TypstOutputFormat } from '../../types/typst';
 import type { SourceMapClickMode } from '../../types/sourceMap';
 import SourceMapFloatingButton from './SourceMapFloatingButton';
@@ -68,6 +69,7 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 
 	const [visualizerHeight, setVisualizerHeight] = useState(300);
 	const [visualizerCollapsed, setVisualizerCollapsed] = useState(false);
+	const [showTerminal, setShowTerminal] = useState(false);
 	const [autoMainFile, setAutoMainFile] = useState<string | undefined>();
 
 	const settingFormat =
@@ -436,8 +438,11 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 			<div className='output-header'>
 				<div className='view-tabs'>
 					<button
-						className={`tab-button ${currentView === 'log' ? 'active' : ''}`}
-						onClick={() => currentView !== 'log' && toggleOutputView()}
+						className={`tab-button ${showTerminal ? '' : currentView === 'log' ? 'active' : ''}`}
+						onClick={() => {
+							setShowTerminal(false);
+							if (currentView !== 'log') toggleOutputView();
+						}}
 					>
 						<div
 							className='status-dot'
@@ -448,21 +453,30 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 					{currentView === 'output' && (
 						<>
 							<button
-								className={`tab-button ${currentView === 'output' && effectiveFormat === 'pdf' ? 'active' : ''}`}
-								onClick={() => handleTabSwitch('pdf')}
+								className={`tab-button ${!showTerminal && currentView === 'output' && effectiveFormat === 'pdf' ? 'active' : ''}`}
+								onClick={() => {
+									setShowTerminal(false);
+									handleTabSwitch('pdf');
+								}}
 							>
 								{t('PDF')}
 							</button>
 
 							<button
-								className={`tab-button ${currentView === 'output' && effectiveFormat === 'canvas-pdf' ? 'active' : ''}`}
-								onClick={() => handleTabSwitch('canvas-pdf')}
+								className={`tab-button ${!showTerminal && currentView === 'output' && effectiveFormat === 'canvas-pdf' ? 'active' : ''}`}
+								onClick={() => {
+									setShowTerminal(false);
+									handleTabSwitch('canvas-pdf');
+								}}
 							>
 								{t('Canvas (PDF)')}
 							</button>
 							<button
-								className={`tab-button ${currentView === 'output' && effectiveFormat === 'canvas' ? 'active' : ''}`}
-								onClick={() => handleTabSwitch('canvas')}
+								className={`tab-button ${!showTerminal && currentView === 'output' && effectiveFormat === 'canvas' ? 'active' : ''}`}
+								onClick={() => {
+									setShowTerminal(false);
+									handleTabSwitch('canvas');
+								}}
 							>
 								{t('Canvas (SVG)')}
 							</button>
@@ -470,13 +484,22 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 					)}
 					{currentView === 'log' && (
 						<button
-							className={'tab-button'}
-							onClick={() => toggleOutputView()}
+							className={`tab-button ${!showTerminal ? 'active' : ''}`}
+							onClick={() => {
+								setShowTerminal(false);
+								toggleOutputView();
+							}}
 							disabled={!hasAnyOutput}
 						>
 							{t('Output')}
 						</button>
 					)}
+					<button
+						className={`tab-button ${showTerminal ? 'active' : ''}`}
+						onClick={() => setShowTerminal(!showTerminal)}
+					>
+						{t('Terminal')}
+					</button>
 				</div>
 				<TypstCompileButton
 					dropdownKey={'typst-output-dropdown'}
@@ -491,7 +514,12 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 				/>
 			</div>
 
-			{!compileLog && !hasAnyOutput ? (
+			{showTerminal ? (
+				<TerminalPanel
+					className='output-terminal'
+					projectId={projectId}
+				/>
+			) : !compileLog && !hasAnyOutput ? (
 				<div className='empty-state'>
 					<p>
 						{t(

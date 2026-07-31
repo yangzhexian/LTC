@@ -31,7 +31,6 @@ import type { ProjectType, ProjectGroup } from '../../types/projects';
 import BackupModal from '../backup/BackupModal';
 import BackupStatusIndicator from '../backup/BackupStatusIndicator';
 import ChatPanel from '../chat/ChatPanel';
-import TerminalPanel from '../ai/TerminalPanel';
 import CollabStatusIndicator from '../collab/CollabStatusIndicator';
 import { EditIcon, ProjectsIcon } from '../common/Icons';
 import Modal from '../common/Modal';
@@ -738,7 +737,6 @@ const EditorAppView: React.FC<EditorAppProps> = ({
 				</p>
 
 				<ChatPanel className='footer-chat' />
-				<TerminalPanel className='footer-terminal' />
 			</footer>
 
 			<KeyboardShortcutsModal

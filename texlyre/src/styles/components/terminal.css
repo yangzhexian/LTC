@@ -1,33 +1,24 @@
-/* Terminal panel */
+/* Terminal panel — used as a tab inside the output window */
 .terminal-panel {
   display: flex;
   flex-direction: column;
-  background: #1e1e2e;
-  border: 1px solid #313244;
-  border-radius: 6px;
+  background: var(--pico-background, #1e1e2e);
   overflow: hidden;
   font-size: 0.85rem;
-}
-
-.terminal-panel.collapsed {
-  flex: 0 0 auto;
-}
-
-.terminal-panel.expanded {
-  flex: 1;
-  min-height: 150px;
+  height: 100%;
+  width: 100%;
 }
 
 .terminal-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
-  cursor: pointer;
+  padding: 3px 10px;
   user-select: none;
-  background: #181825;
-  border-bottom: 1px solid #313244;
-  color: #cdd6f4;
+  background: var(--pico-secondary-background, #181825);
+  border-bottom: 1px solid var(--accent-border, #313244);
+  color: var(--text-color, #cdd6f4);
+  flex-shrink: 0;
 }
 
 .terminal-panel-title {
@@ -53,31 +44,21 @@
   background: #f38ba8;
 }
 
-.terminal-panel-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.terminal-ws-url {
+.terminal-cwd {
   font-size: 0.7rem;
   opacity: 0.5;
   font-family: monospace;
-}
-
-.terminal-panel-controls button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #cdd6f4;
-  font-size: 0.75rem;
-  padding: 2px 4px;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .terminal-container {
   flex: 1;
   padding: 4px;
   min-height: 0;
+  background: var(--pico-background, #1e1e2e);
 }
 
 .terminal-container .xterm {
