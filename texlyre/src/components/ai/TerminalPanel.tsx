@@ -329,6 +329,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           syncStarted.current = true;
           await pushAllFiles(ws);
         }
+        // Pull files already on the server (populates this browser's file tree,
+        // even if no other collaborator is currently online)
+        ws.send(JSON.stringify({ type: 'list-files' }));
       };
 
       ws.onmessage = (event) => {

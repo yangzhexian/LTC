@@ -103,6 +103,24 @@ function encodeFileChangeMessage(abs, relPath) {
 }
 
 // ---- File sync helpers ----
+function walkDir(dir, base, out) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const abs = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkDir(abs, base, out);
+    } else {
+      out.push(path.relative(base, abs).replace(/\\/g, '/'));
+    }
+  }
+  return out;
+}
+
 const TEXT_EXTENSIONS = new Set([
   'tex', 'bib', 'sty', 'cls', 'txt', 'md', 'log', 'aux', 'cfg', 'def',
   'lst', 'py', 'sh', 'json', 'yml', 'yaml', 'csv', 'xml', 'html', 'css', 'js',
@@ -254,6 +272,25 @@ wss.on('connection', (ws, req) => {
               fs.unlinkSync(abs);
               console.log(`  [sync] deleted: ${msg.path}`);
             }
+          }
+          break;
+        case 'list-files':
+          // Pull request: send the current project directory contents to the
+          // requesting browser (enables new collaborators to fetch files even
+          // when no other browser is online).
+          {
+            const files = walkDir(cwd, cwd, []);
+            let sent = 0;
+            for (const rel of files) {
+              if (isTempFile(rel)) continue;
+              try {
+                const abs = safeResolve(cwd, rel);
+                if (!abs) continue;
+                ws.send(encodeFileChangeMessage(abs, rel));
+                sent++;
+              } catch {}
+            }
+            console.log(`  [sync] listed ${sent} files to client`);
           }
           break;
       }
