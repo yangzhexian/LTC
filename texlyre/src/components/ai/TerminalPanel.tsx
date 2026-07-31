@@ -186,11 +186,12 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       // Upload Yjs documents that aren't already represented as files
       const docs = documentsRef.current || [];
       const docUrl = docUrlRef.current;
-      console.log('[Agent][debug] documents prop:', docs.length, 'docUrl:', docUrl);
       if (docs.length > 0 && docUrl) {
         for (const doc of docs) {
           const path = doc.name;
-          if (uploadedPaths.has(path)) continue;
+          // NOTE: do NOT skip based on file uploads — linked files may have
+          // empty fileStorageService content (moved to Yjs on link). The
+          // document content is authoritative; the content cache decides.
           const content = await getDocumentContent(docUrl, doc.id);
           if (!content) continue;
           // Skip if unchanged since last upload (prevents sync loops)
@@ -310,6 +311,11 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         : content;
       const cacheValue = encoding === 'base64' ? content : content;
 
+      // Auto-link: if a collaborative document matches this file path, link them
+      const linkedDoc = (documentsRef.current || []).find(
+        (d) => d.name === texlyrePath,
+      );
+
       if (!target) {
         // New file created by the agent on the server — create it in the browser
         const name = cleanPath.split('/').pop() || cleanPath;
@@ -329,6 +335,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             lastModified: now,
             createdAt: now,
             isDeleted: false,
+            documentId: linkedDoc?.id,
             size: encoding === 'base64'
               ? Math.floor((content.length * 3) / 4)
               : new Blob([content]).size,
@@ -338,6 +345,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         console.log(`[Agent] created new file from server: ${texlyrePath}`);
       } else {
         await fileStorageService.updateFileContent(target.id, payload);
+        // Link if a matching collaborative document exists and the file isn't linked
+        if (linkedDoc && !target.documentId) {
+          target.documentId = linkedDoc.id;
+          await fileStorageService.storeFile(target, {
+            showConflictDialog: false,
+          });
+          console.log(`[Agent] linked ${texlyrePath} → document ${linkedDoc.id}`);
+        }
       }
       // Mark as synced so we don't re-upload the same content
       uploadedContent.current.set(texlyrePath, cacheValue);
