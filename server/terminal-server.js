@@ -160,11 +160,15 @@ wss.on('connection', (ws, req) => {
     if (!abs) return;
     if (isTempFile(relPath)) return;
 
-    // Skip our own writes (echo suppression)
+    // Echo suppression: skip events whose mtime is <= our last self-write.
+    // IMPORTANT: do NOT delete the selfWrites entry — multiple watchers
+    // (one per connected browser) may process the same event; deleting the
+    // entry would make the next watcher treat it as an external change,
+    // causing an infinite upload/broadcast loop.
     try {
       const mtime = fs.statSync(abs).mtimeMs;
-      if (selfWrites.get(abs) === mtime) {
-        selfWrites.delete(abs);
+      const selfMtime = selfWrites.get(abs);
+      if (selfMtime !== undefined && mtime <= selfMtime) {
         return;
       }
     } catch {

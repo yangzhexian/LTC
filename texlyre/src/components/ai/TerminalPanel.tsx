@@ -146,6 +146,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     'lst', 'py', 'sh', 'json', 'yml', 'yaml', 'csv', 'xml', 'html', 'css', 'js',
   ]);
 
+  // Cache of last uploaded content per path — only push files that changed
+  const uploadedContent = useRef<Map<string, string>>(new Map());
+
   const pushAllFiles = async (ws: WebSocket) => {
     if (!projectId) return;
     try {
@@ -157,28 +160,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         const raw = file.content;
         if (raw === undefined) continue;
         const ext = file.path.split('.').pop()?.toLowerCase() || '';
+        let content: string;
         if (typeof raw === 'string') {
-          ws.send(JSON.stringify({ type: 'write-file', path: file.path, content: raw }));
+          content = raw;
         } else if (raw instanceof ArrayBuffer) {
-          const isText = TEXT_EXTENSIONS.has(ext);
-          if (isText) {
-            ws.send(JSON.stringify({
-              type: 'write-file',
-              path: file.path,
-              content: new TextDecoder().decode(raw),
-            }));
-          } else {
-            // Binary file: upload as base64 so agents can use figures
-            ws.send(JSON.stringify({
-              type: 'write-file',
-              path: file.path,
-              content: arrayBufferToBase64(raw),
-              encoding: 'base64',
-            }));
-          }
+          content = TEXT_EXTENSIONS.has(ext)
+            ? new TextDecoder().decode(raw)
+            : arrayBufferToBase64(raw);
         } else {
           continue;
         }
+        // Skip if unchanged since last upload
+        if (uploadedContent.current.get(file.path) === content) continue;
+        uploadedContent.current.set(file.path, content);
+        ws.send(JSON.stringify({
+          type: 'write-file',
+          path: file.path,
+          content,
+          encoding: typeof raw === 'string' || TEXT_EXTENSIONS.has(ext) ? undefined : 'base64',
+        }));
         uploadedPaths.add(file.path);
         count++;
       }
@@ -241,6 +241,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       } else {
         await fileStorageService.updateFileContent(target.id, content);
       }
+      // Mark as synced so we don't re-upload the same content
+      uploadedContent.current.set(texlyrePath, content);
       fileStorageEventEmitter.emitChange();
       document.dispatchEvent(
         new CustomEvent('texlyre-agent-file-synced', {
