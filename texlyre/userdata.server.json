@@ -19,6 +19,8 @@
     "latex-default-format": "pdf",
     "latex-store-cache": true,
     "latex-store-working-directory": false,
+    "latex-texlive-endpoint": "https://texlive.texlyre.org",
+    "latex-busytex-endpoint": "https://texlive2026.texlyre.org",
     "pdf-renderer-annotations": true,
     "pdf-renderer-enable": true,
     "pdf-renderer-initial-zoom": "100",
