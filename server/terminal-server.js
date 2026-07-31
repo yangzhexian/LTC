@@ -137,11 +137,28 @@ wss.on('connection', (ws, req) => {
   });
 
   // ---- File sync: watch project dir for external changes (e.g. codex) ----
+  // Debounce per-path so rapid writes (latexmk, codex) coalesce into one push
+  const pendingPushes = new Map(); // absPath → timer
+
+  const pushFileChange = (abs, relPath) => {
+    if (closed) return;
+    try {
+      const content = fs.readFileSync(abs, 'utf8');
+      ws.send(JSON.stringify({ type: 'file-changed', path: relPath, content }));
+      console.log(`  [sync] file changed on disk: ${relPath}`);
+    } catch {}
+  };
+
+  const isTempFile = (name) =>
+    name.endsWith('.swp') || name.endsWith('.tmp') || name.endsWith('~') ||
+    name.includes('.#') || name.startsWith('.#') || name.endsWith('.fuse_hidden');
+
   const watcher = fs.watch(cwd, { recursive: true }, (eventType, filename) => {
     if (!filename || closed) return;
-    const relPath = filename.toString();
+    const relPath = filename.toString().replace(/^\/+/, '');
     const abs = safeResolve(cwd, relPath);
     if (!abs) return;
+    if (isTempFile(relPath)) return;
 
     // Skip our own writes (echo suppression)
     try {
@@ -150,14 +167,20 @@ wss.on('connection', (ws, req) => {
         selfWrites.delete(abs);
         return;
       }
-    } catch { return; }
+    } catch {
+      // File may be deleted or mid-write (rename events) — ignore
+      return;
+    }
 
-    // Send changed file content back to the browser
-    try {
-      const content = fs.readFileSync(abs, 'utf8');
-      ws.send(JSON.stringify({ type: 'file-changed', path: relPath, content }));
-      console.log(`  [sync] file changed on disk: ${relPath}`);
-    } catch {}
+    // Debounce: replace any pending push for this path
+    if (pendingPushes.has(abs)) clearTimeout(pendingPushes.get(abs));
+    pendingPushes.set(
+      abs,
+      setTimeout(() => {
+        pendingPushes.delete(abs);
+        pushFileChange(abs, relPath);
+      }, 150),
+    );
   });
 
   ws.on('message', (data) => {
@@ -193,6 +216,8 @@ wss.on('connection', (ws, req) => {
     closed = true;
     term.kill();
     try { watcher.close(); } catch {}
+    for (const timer of pendingPushes.values()) clearTimeout(timer);
+    pendingPushes.clear();
     console.log(`  [terminal] disconnect (${wss.clients.size - 1} active)`);
   });
 

@@ -10,7 +10,7 @@ import { fontSizeMap } from '../../contexts/EditorContext';
 import { useSettings } from '../../hooks/useSettings';
 import { useTheme } from '../../hooks/useTheme';
 import { fileStorageEventEmitter, fileStorageService } from '../../services/FileStorageService';
-import { isTemporaryFile } from '../../utils/fileUtils';
+import { detectFileType, isTemporaryFile } from '../../utils/fileUtils';
 
 interface TerminalPanelProps {
   className?: string;
@@ -207,19 +207,47 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   // ---- File sync: apply server-side changes back to IndexedDB ----
   const applyServerChange = async (relPath: string, content: string) => {
     try {
+      const cleanPath = relPath.replace(/^\/+/, '');
+      const texlyrePath = `/${cleanPath}`;
       const files = await fileStorageService.getAllFiles(true, false, false);
-      const target = files.find(
-        (f) => f.type === 'file' && f.path === relPath && !f.isDeleted,
+      let target = files.find(
+        (f) => f.type === 'file' && f.path === texlyrePath && !f.isDeleted,
       );
-      if (!target) return;
-      await fileStorageService.updateFileContent(target.id, content);
+
+      if (!target) {
+        // New file created by the agent on the server — create it in the browser
+        const name = cleanPath.split('/').pop() || cleanPath;
+        const parentPath = '/' + cleanPath.split('/').slice(0, -1).join('/');
+        try {
+          await fileStorageService.createDirectoryPath(parentPath);
+        } catch {}
+        const now = Date.now();
+        await fileStorageService.storeFile(
+          {
+            id: crypto.randomUUID(),
+            name,
+            path: texlyrePath,
+            type: 'file',
+            content,
+            mimeType: detectFileType(name),
+            lastModified: now,
+            createdAt: now,
+            isDeleted: false,
+            size: new Blob([content]).size,
+          } as never,
+          { showConflictDialog: false },
+        );
+        console.log(`[Agent] created new file from server: ${texlyrePath}`);
+      } else {
+        await fileStorageService.updateFileContent(target.id, content);
+      }
       fileStorageEventEmitter.emitChange();
       document.dispatchEvent(
         new CustomEvent('texlyre-agent-file-synced', {
-          detail: { path: relPath, content, fileId: target.id },
+          detail: { path: texlyrePath, content },
         }),
       );
-      console.log(`[Agent] applied server change to: ${relPath}`);
+      console.log(`[Agent] applied server change to: ${texlyrePath}`);
     } catch (e) {
       console.error('[Agent] apply server change failed', e);
     }
