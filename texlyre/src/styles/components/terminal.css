@@ -139,6 +139,26 @@
   margin: 0 !important;
 }
 
+/* Leftover space (e.g. bottom strip from row-height rounding) must never
+   show a dark viewport background in light mode */
+[data-theme-mode='light'] .terminal-container .xterm,
+[data-theme-mode='light'] .terminal-container .xterm-viewport,
+[data-theme-mode='light'] .terminal-container .xterm-screen,
+[data-theme-mode='light'] .terminal-container .xterm-rows,
+:root:not([data-theme-mode='dark']) .terminal-container .xterm,
+:root:not([data-theme-mode='dark']) .terminal-container .xterm-viewport,
+:root:not([data-theme-mode='dark']) .terminal-container .xterm-screen,
+:root:not([data-theme-mode='dark']) .terminal-container .xterm-rows {
+  background-color: #ffffff !important;
+}
+
+[data-theme-mode='dark'] .terminal-container .xterm,
+[data-theme-mode='dark'] .terminal-container .xterm-viewport,
+[data-theme-mode='dark'] .terminal-container .xterm-screen,
+[data-theme-mode='dark'] .terminal-container .xterm-rows {
+  background-color: #1e1e2e !important;
+}
+
 .terminal-container .xterm-viewport {
   scrollbar-width: thin;
   scrollbar-color: rgba(128, 128, 128, 0.5) transparent;
