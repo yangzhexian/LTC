@@ -16,7 +16,7 @@
     "editor-spell-check": false,
     "editor-syntax-highlighting": true,
     "editor-theme-highlights": "auto",
-    "latex-engine": "pdftex",
+    "latex-engine": "busytex-pdftex",
     "latex-default-format": "pdf",
     "latex-store-cache": true,
     "latex-store-working-directory": false,
