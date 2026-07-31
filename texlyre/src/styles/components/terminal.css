@@ -2,11 +2,54 @@
 .terminal-panel {
   display: flex;
   flex-direction: column;
-  background: var(--pico-background, #1e1e2e);
   overflow: hidden;
   font-size: 0.85rem;
   height: 100%;
   width: 100%;
+  border: none;
+  outline: none;
+}
+
+/* ---- Light mode (explicit, no dark fallbacks) ---- */
+[data-theme-mode='light'] .terminal-panel,
+:root:not([data-theme-mode='dark']) .terminal-panel {
+  background: #ffffff;
+}
+
+[data-theme-mode='light'] .terminal-panel-header,
+:root:not([data-theme-mode='dark']) .terminal-panel-header {
+  background: #f3f4f6;
+  border-bottom: 1px solid #d8dee6;
+  color: #1f2328;
+}
+
+[data-theme-mode='light'] .terminal-container,
+:root:not([data-theme-mode='dark']) .terminal-container {
+  background: #ffffff;
+}
+
+[data-theme-mode='light'] .terminal-cwd,
+:root:not([data-theme-mode='dark']) .terminal-cwd {
+  color: #6c757d;
+}
+
+/* ---- Dark mode ---- */
+[data-theme-mode='dark'] .terminal-panel {
+  background: #1e1e2e;
+}
+
+[data-theme-mode='dark'] .terminal-panel-header {
+  background: #181825;
+  border-bottom: 1px solid #313244;
+  color: #cdd6f4;
+}
+
+[data-theme-mode='dark'] .terminal-container {
+  background: #1e1e2e;
+}
+
+[data-theme-mode='dark'] .terminal-cwd {
+  color: #7f8ea3;
 }
 
 .terminal-panel-header {
@@ -15,9 +58,6 @@
   justify-content: space-between;
   padding: 3px 10px;
   user-select: none;
-  background: var(--pico-secondary-background, #181825);
-  border-bottom: 1px solid var(--accent-border, #313244);
-  color: var(--text-color, #cdd6f4);
   flex-shrink: 0;
 }
 
@@ -37,11 +77,11 @@
 }
 
 .terminal-status.connected {
-  background: #a6e3a1;
+  background: #2f9e44;
 }
 
 .terminal-status.disconnected {
-  background: #f38ba8;
+  background: #e03131;
 }
 
 .agent-badge {
@@ -57,7 +97,7 @@
 
 .terminal-cwd {
   font-size: 0.7rem;
-  opacity: 0.5;
+  opacity: 0.6;
   font-family: monospace;
   max-width: 50%;
   overflow: hidden;
@@ -69,7 +109,6 @@
   flex: 1;
   padding: 4px;
   min-height: 0;
-  background: var(--pico-background, #1e1e2e);
 }
 
 .terminal-container .xterm {
@@ -79,5 +118,4 @@
 
 .terminal-container .xterm-viewport {
   scrollbar-width: thin;
-  scrollbar-color: #45475a transparent;
 }
