@@ -80,8 +80,100 @@ function broadcast(docId, message, origin) {
   }
 }
 
+// ---- File → linked Yjs document bridge ----
+// When the agent (or any external process) modifies a file on disk that is
+// LINKED to a collaborative document, apply the change into the document's
+// Yjs room. The doc update then broadcasts to every connected editor in
+// real time (like a collaborator typing).
+function applyToLinkedDoc(cwd, relPath, content) {
+  try {
+    const projectId = path.basename(cwd);
+    if (!projectId) return false;
+
+    // Load the project metadata doc (documents: [{id, name}]) where
+    // document.name === file path for linked documents
+    const metaRoom = `${projectId}-yjs_metadata`;
+    const metaDoc = getDoc(metaRoom);
+    const dataMap = metaDoc.getMap('data');
+    const documents = dataMap.get('documents');
+    if (!Array.isArray(documents)) return false;
+
+    const texPath = `/${String(relPath).replace(/^\/+/, '')}`;
+    const linked = documents.find((d) => d && d.name === texPath);
+    if (!linked || !linked.id) return false;
+
+    const room = `${projectId}-yjs_${linked.id}`;
+    const doc = getDoc(room);
+    const text = doc.getText('codemirror');
+    const current = text.toString();
+    if (current === content) return false;
+
+    text.delete(0, current.length);
+    text.insert(0, content);
+    console.log(`  [sync] applied agent change into Yjs document: ${texPath}`);
+    return true;
+  } catch (err) {
+    console.error('  [sync] applyToLinkedDoc failed:', err.message);
+    return false;
+  }
+}
+
+// ---- File → linked Yjs document bridge ----
+// When the agent (or any external process) modifies a file on disk that is
+// LINKED to a collaborative document, apply the change into the document's
+// Yjs room. The doc update then broadcasts to every connected editor in
+// real time (like a collaborator typing).
+function applyToLinkedDoc(projectId, relPath, content) {
+  try {
+    if (!projectId) return false;
+
+    // Load the project metadata doc (documents: [{id, name}]) where
+    // document.name === file path for linked documents
+    const metaRoom = `${projectId}-yjs_metadata`;
+    const metaDoc = getDoc(metaRoom);
+    const dataMap = metaDoc.getMap('data');
+    const documents = dataMap.get('documents');
+    if (!Array.isArray(documents)) return false;
+
+    const texPath = `/${String(relPath).replace(/^\/+/, '')}`;
+    const linked = documents.find((d) => d && d.name === texPath);
+    if (!linked || !linked.id) return false;
+
+    const room = `${projectId}-yjs_${linked.id}`;
+    const doc = getDoc(room);
+    const text = doc.getText('codemirror');
+    const current = text.toString();
+    if (current === content) return false;
+
+    text.delete(0, current.length);
+    text.insert(0, content);
+    console.log(`  [sync] applied agent change into Yjs document: ${texPath}`);
+    return true;
+  } catch (err) {
+    console.error('  [sync] applyToLinkedDoc failed:', err.message);
+    return false;
+  }
+}
+
 // ---- HTTP + WebSocket server ----
-const server = http.createServer((_req, res) => {
+const server = http.createServer((req, res) => {
+  // Endpoint for the terminal server to push agent file changes into Yjs docs
+  if (req.method === 'POST' && req.url === '/apply-file') {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      try {
+        const { projectId, path: relPath, content } = JSON.parse(body);
+        const ok = applyToLinkedDoc(projectId, relPath, content);
+        res.writeHead(ok ? 200 : 404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Yjs WebSocket server\n');
 });

@@ -23,6 +23,8 @@ const { WebSocketServer } = require('ws');
 
 const PORT = parseInt(process.argv[2] || '8084', 10);
 const DEFAULT_CWD = path.resolve(process.argv[3] || '.');
+// Port of the yjs-ws-server (for the /apply-file bridge)
+const YJS_PORT = parseInt(process.env.YJS_PORT || '8082', 10);
 
 // Never crash the process on unhandled errors — log and keep serving
 process.on('uncaughtException', (err) => {
@@ -195,6 +197,22 @@ wss.on('connection', (ws, req) => {
   const pushFileChange = (abs, relPath) => {
     if (closed) return;
     try {
+      const buf = fs.readFileSync(abs);
+      const ext = relPath.split('.').pop()?.toLowerCase() || '';
+
+      // If the file is linked to a collaborative document, apply the change
+      // into the Yjs room so ALL editors update in real time.
+      // (yjs-ws-server owns the Yjs docs; we forward via its HTTP endpoint)
+      if (TEXT_EXTENSIONS.has(ext)) {
+        const projectId = path.basename(cwd);
+        const content = buf.toString('utf8');
+        fetch(`http://localhost:${YJS_PORT}/apply-file`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId, path: relPath, content }),
+        }).catch(() => {});
+      }
+
       // Broadcast to ALL browsers in this project (agent changes are shared)
       broadcastToProject(cwd, encodeFileChangeMessage(abs, relPath), null);
       console.log(`  [sync] file changed on disk: ${relPath}`);
