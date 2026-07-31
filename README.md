@@ -32,7 +32,7 @@ Users → open http://server-ip:8080 in browser → real-time editing
 ```bash
 git clone <repo-url> ~/ltc
 cd ~/ltc
-bash server/start.sh
+bash server/start.sh/
 ```
 
 This starts three services in a tmux session `texlyre-server`:

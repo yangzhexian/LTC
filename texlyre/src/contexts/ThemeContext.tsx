@@ -79,6 +79,25 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
 		currentThemePlugin.applyLayout();
 	}, [currentThemePlugin, currentVariant]);
 
+	// Fallback: apply a default theme mode when no theme plugin is registered
+	// (e.g. plugin registry is empty). Without this, Pico CSS variables
+	// never activate and the page renders with broken colors.
+	useEffect(() => {
+		if (currentThemePlugin) return;
+
+		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+		const applyDefault = () => {
+			const mode = currentVariant === 'system'
+				? (mediaQuery.matches ? 'dark' : 'light')
+				: currentVariant;
+			document.documentElement.setAttribute('data-theme-mode', mode);
+		};
+
+		applyDefault();
+		mediaQuery.addEventListener('change', applyDefault);
+		return () => mediaQuery.removeEventListener('change', applyDefault);
+	}, [currentThemePlugin, currentVariant]);
+
 	useEffect(() => {
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 		const handleChange = () => {

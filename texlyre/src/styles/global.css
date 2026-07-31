@@ -14,10 +14,41 @@
 	-moz-osx-font-smoothing: grayscale;
 	-webkit-text-size-adjust: 100%;
 	height: 100vh;
+
+	/* Fallback colors (used when no theme plugin is active) */
+	--pico-background: #ffffff;
+	--pico-secondary-background: #f5f6f8;
+	--pico-primary: #2563eb;
+	--pico-primary-hover: #1d4ed8;
+	--pico-primary-focus: rgba(37, 99, 235, 0.12);
+	--pico-primary-inverse: #ffffff;
+	--pico-secondary: #6c757d;
+	--pico-muted-color: #8a93a3;
+	--text-color: #1f2328;
+	--border-color: #d8dee6;
+	--accent-border: #cbd2db;
+	--link-color: #2563eb;
+	--link-hover-color: #1d4ed8;
+}
+
+[data-theme-mode="dark"] {
+	--pico-background: #1e1e2e;
+	--pico-secondary-background: #2a2a3d;
+	--pico-primary: #40b9ff;
+	--pico-primary-hover: #66c9ff;
+	--pico-primary-focus: rgba(64, 185, 255, 0.15);
+	--pico-primary-inverse: #1e1e2e;
+	--pico-secondary: #adb5bd;
+	--pico-muted-color: #7f8ea3;
+	--text-color: #e4e8ef;
+	--border-color: #3a3a4d;
+	--accent-border: #45455a;
+	--link-color: #40b9ff;
+	--link-hover-color: #66c9ff;
 }
 
 #root {
-	max-width: 65%;
+	max-width: 100%;
 	height: 100%;
 	margin: 0 auto;
 	padding: var(--space-md);
