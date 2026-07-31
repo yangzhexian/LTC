@@ -313,9 +313,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       if (!target) {
         // New file created by the agent on the server — create it in the browser
         const name = cleanPath.split('/').pop() || cleanPath;
-        const parentPath = '/' + cleanPath.split('/').slice(0, -1).join('/');
+        // createDirectoryPath expects a FILE path and creates all ancestor dirs
         try {
-          await fileStorageService.createDirectoryPath(parentPath);
+          await fileStorageService.createDirectoryPath(texlyrePath);
         } catch {}
         const now = Date.now();
         await fileStorageService.storeFile(
