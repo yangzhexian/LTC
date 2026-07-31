@@ -76,6 +76,12 @@ const server = http.createServer((_req, res) => {
 const wss = new WebSocketServer({ server });
 
 // ---- File sync helpers ----
+const TEXT_EXTENSIONS = new Set([
+  'tex', 'bib', 'sty', 'cls', 'txt', 'md', 'log', 'aux', 'cfg', 'def',
+  'lst', 'py', 'sh', 'json', 'yml', 'yaml', 'csv', 'xml', 'html', 'css', 'js',
+  'out', 'toc', 'fdb_latexmk', 'fls', 'blg', 'bbl', 'nav', 'snm', 'vrb', 'xdv',
+]);
+
 function safeResolve(base, rel) {
   // Client paths look like "/jrnl.tex" — strip leading slashes, treat as relative
   const clean = String(rel).replace(/^\/+/, '');
@@ -143,8 +149,14 @@ wss.on('connection', (ws, req) => {
   const pushFileChange = (abs, relPath) => {
     if (closed) return;
     try {
-      const content = fs.readFileSync(abs, 'utf8');
-      ws.send(JSON.stringify({ type: 'file-changed', path: relPath, content }));
+      const buf = fs.readFileSync(abs);
+      const ext = relPath.split('.').pop()?.toLowerCase() || '';
+      if (TEXT_EXTENSIONS.has(ext)) {
+        ws.send(JSON.stringify({ type: 'file-changed', path: relPath, content: buf.toString('utf8') }));
+      } else {
+        // Binary file: send as base64 so the browser keeps pristine bytes
+        ws.send(JSON.stringify({ type: 'file-changed', path: relPath, content: buf.toString('base64'), encoding: 'base64' }));
+      }
       console.log(`  [sync] file changed on disk: ${relPath}`);
     } catch {}
   };

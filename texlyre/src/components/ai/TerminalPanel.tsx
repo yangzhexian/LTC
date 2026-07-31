@@ -205,10 +205,20 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   };
 
   // ---- File sync: apply server-side changes back to IndexedDB ----
-  const applyServerChange = async (relPath: string, content: string) => {
+  const applyServerChange = async (
+    relPath: string,
+    content: string,
+    encoding?: string,
+  ) => {
     try {
       const cleanPath = relPath.replace(/^\/+/, '');
       const texlyrePath = `/${cleanPath}`;
+      // Binary files arrive as base64 — decode to pristine bytes
+      const payload: string | ArrayBuffer = encoding === 'base64'
+        ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0)).buffer
+        : content;
+      const cacheValue = encoding === 'base64' ? content : content;
+
       const files = await fileStorageService.getAllFiles(true, false, false);
       let target = files.find(
         (f) => f.type === 'file' && f.path === texlyrePath && !f.isDeleted,
@@ -228,21 +238,23 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
             name,
             path: texlyrePath,
             type: 'file',
-            content,
+            content: payload,
             mimeType: detectFileType(name),
             lastModified: now,
             createdAt: now,
             isDeleted: false,
-            size: new Blob([content]).size,
+            size: encoding === 'base64'
+              ? Math.floor((content.length * 3) / 4)
+              : new Blob([content]).size,
           } as never,
           { showConflictDialog: false },
         );
         console.log(`[Agent] created new file from server: ${texlyrePath}`);
       } else {
-        await fileStorageService.updateFileContent(target.id, content);
+        await fileStorageService.updateFileContent(target.id, payload);
       }
       // Mark as synced so we don't re-upload the same content
-      uploadedContent.current.set(texlyrePath, content);
+      uploadedContent.current.set(texlyrePath, cacheValue);
       fileStorageEventEmitter.emitChange();
       document.dispatchEvent(
         new CustomEvent('texlyre-agent-file-synced', {
@@ -319,7 +331,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           try {
             const msg = JSON.parse(event.data);
             if (msg.type === 'file-changed') {
-              applyServerChange(msg.path, msg.content);
+              applyServerChange(msg.path, msg.content, msg.encoding);
               return;
             }
           } catch {}
