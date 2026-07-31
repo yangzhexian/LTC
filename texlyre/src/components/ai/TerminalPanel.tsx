@@ -11,6 +11,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { useTheme } from '../../hooks/useTheme';
 import { fileStorageEventEmitter, fileStorageService } from '../../services/FileStorageService';
 import { detectFileType, isTemporaryFile } from '../../utils/fileUtils';
+import { threeWayMerge } from '../../utils/textDiffUtils';
 
 interface TerminalPanelProps {
   className?: string;
@@ -227,8 +228,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       );
 
       // Conflict guard: if we have unpushed local edits for this file,
-      // keep LOCAL version — do not let an incoming server version silently
-      // overwrite our work. Our local edits win and are pushed next cycle.
+      // MERGE both versions (3-way) instead of silently overwriting.
       if (target) {
         const raw = target.content;
         const localStr =
@@ -244,9 +244,63 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
           localStr !== lastUploaded &&
           localStr !== content
         ) {
-          console.warn(
-            `[Agent] CONFLICT on ${texlyrePath}: keeping local edits (rejected server version). Local will be pushed next cycle.`,
-          );
+          const ext = cleanPath.split('.').pop()?.toLowerCase() || '';
+          if (TEXT_EXTENSIONS.has(ext)) {
+            // 3-way merge: base = last uploaded (common ancestor)
+            const { merged, hasConflicts } = threeWayMerge(
+              lastUploaded,
+              localStr,
+              content,
+            );
+            await fileStorageService.updateFileContent(target.id, merged);
+            uploadedContent.current.set(texlyrePath, merged);
+            if (hasConflicts) {
+              console.warn(
+                `[Agent] CONFLICT on ${texlyrePath}: overlapping edits — merged with markers (<<<<<<< local / >>>>>>> remote). Resolve manually.`,
+              );
+            } else {
+              console.log(
+                `[Agent] MERGED ${texlyrePath}: both sides' changes preserved`,
+              );
+            }
+            fileStorageEventEmitter.emitChange();
+            document.dispatchEvent(
+              new CustomEvent('texlyre-agent-file-synced', {
+                detail: { path: texlyrePath, content: merged },
+              }),
+            );
+          } else {
+            // Binary file: keep local, save incoming version as backup
+            const name = cleanPath.split('/').pop() || cleanPath;
+            const backupName = `${name}.conflict-${Date.now()}`;
+            const backupPath = `/${cleanPath
+              .split('/')
+              .slice(0, -1)
+              .concat(backupName)
+              .join('/')}`;
+            const payload: string | ArrayBuffer = encoding === 'base64'
+              ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0)).buffer
+              : content;
+            try {
+              await fileStorageService.storeFile(
+                {
+                  id: crypto.randomUUID(),
+                  name: backupName,
+                  path: backupPath,
+                  type: 'file',
+                  content: payload,
+                  mimeType: detectFileType(backupName),
+                  lastModified: Date.now(),
+                  createdAt: Date.now(),
+                  isDeleted: false,
+                } as never,
+                { showConflictDialog: false },
+              );
+            } catch {}
+            console.warn(
+              `[Agent] CONFLICT on ${texlyrePath} (binary): kept local version; incoming saved as ${backupName}`,
+            );
+          }
           return;
         }
       }
