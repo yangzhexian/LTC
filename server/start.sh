@@ -2,10 +2,10 @@
 #
 # start.sh — Centralized TeXlyre server (Overleaf-like).
 #
-# Starts three services:
-#   1. TeXlyre HTTP server    (port 8080) — serves the web app
-#   2. Yjs WebSocket server   (port 8082) — document sync
-#   3. Terminal WebSocket     (port 8084) — browser shell (run codex, latexmk, etc.)
+# Starts:
+#   1. TeXlyre HTTP server   (port 8080) — serves the web app (vite preview of dist)
+#   2. Yjs WebSocket server  (port 8082) — document sync
+#   3. Terminal WebSocket    (port 8084) — browser shell (run codex, latexmk, etc.)
 #
 # Usage:
 #   cd /path/to/LTC && bash server/start.sh [http-port] [ws-port] [term-port]
@@ -21,7 +21,7 @@ PORT_TERM=${3:-8084}
 SESSION="texlyre-server"
 
 echo "=== TeXlyre Centralized Server ==="
-echo "  HTTP:     http://localhost:$PORT_HTTP"
+echo "  HTTP:     http://localhost:$PORT_HTTP/texlyre/"
 echo "  Yjs WS:   ws://localhost:$PORT_WS"
 echo "  Terminal: ws://localhost:$PORT_TERM"
 echo ""
@@ -41,29 +41,29 @@ if ! command -v make &>/dev/null; then
   sudo apt update -qq && sudo apt install build-essential -y -qq
 fi
 
-# ---- Install + Build ----
+# ---- Install dependencies ----
 if [ ! -d "texlyre/node_modules" ]; then
   echo "Installing TeXlyre dependencies..."
   (cd texlyre && npm install)
 fi
 
-# Apply server settings
+# Apply server settings (WebSocket mode)
 cp texlyre/userdata.server.json texlyre/userdata.local.json
 
-if [ ! -d "texlyre/node_modules/.vite" ]; then
-  echo "Setting up assets..."
-  (cd texlyre && node scripts/setup-assets.cjs 2>&1)
+# ---- Build (full pipeline: generate:plugins + tsc + vite build) ----
+BUILD_MARKER="texlyre/dist/.ltc-build-v2"
+if [ ! -d "texlyre/dist" ] || [ ! -f "$BUILD_MARKER" ]; then
+  echo "Building TeXlyre (generate plugins + typecheck + bundle)..."
+  (cd texlyre && npm run build:local)
+  touch "$BUILD_MARKER"
 fi
-
-# Copy config JSONs to public/ so Vite dev server can serve them
-cp texlyre/userdata.json texlyre/userdata.local.json texlyre/public/ 2>/dev/null
 
 # ---- Kill previous session ----
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 # ---- Start services in tmux ----
 tmux new-session -d -s "$SESSION" -n "texlyre" \; \
-  send-keys "cd texlyre && node scripts/pm.cjs vite --port $PORT_HTTP --host 0.0.0.0" Enter
+  send-keys "cd texlyre && node scripts/pm.cjs vite preview --port $PORT_HTTP --host 0.0.0.0 --strictPort" Enter
 
 sleep 1
 
@@ -92,12 +92,6 @@ cat <<EOF
         stop    → tmux kill-session -t $SESSION
 
 EOF
-
-echo "User setup (one-time):"
-echo "  1. Open http://$HOST_IP:$PORT_HTTP"
-echo "  2. Settings → Collaboration: Provider Type = WebSocket (server)"
-echo "  3. Settings → Collaboration: WebSocket Server = ws://$HOST_IP:$PORT_WS"
-echo ""
 
 tmux kill-window -t "${SESSION}:_bootstrap" 2>/dev/null || true
 tmux attach -t "$SESSION"
