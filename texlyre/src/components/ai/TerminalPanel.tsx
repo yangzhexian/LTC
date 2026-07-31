@@ -220,6 +220,36 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       if (uploadedContent.current.get(texlyrePath) === content) {
         return;
       }
+
+      const files = await fileStorageService.getAllFiles(true, false, false);
+      let target = files.find(
+        (f) => f.type === 'file' && f.path === texlyrePath && !f.isDeleted,
+      );
+
+      // Conflict guard: if we have unpushed local edits for this file,
+      // keep LOCAL version — do not let an incoming server version silently
+      // overwrite our work. Our local edits win and are pushed next cycle.
+      if (target) {
+        const raw = target.content;
+        const localStr =
+          typeof raw === 'string'
+            ? raw
+            : raw instanceof ArrayBuffer
+              ? new TextDecoder().decode(raw)
+              : null;
+        const lastUploaded = uploadedContent.current.get(texlyrePath);
+        if (
+          localStr !== null &&
+          lastUploaded !== undefined &&
+          localStr !== lastUploaded &&
+          localStr !== content
+        ) {
+          console.warn(
+            `[Agent] CONFLICT on ${texlyrePath}: keeping local edits (rejected server version). Local will be pushed next cycle.`,
+          );
+          return;
+        }
+      }
       // Binary files arrive as base64 — decode to pristine bytes
       const payload: string | ArrayBuffer = encoding === 'base64'
         ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0)).buffer
@@ -394,12 +424,21 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     };
     const unsub = fileStorageEventEmitter.onChange(onChange);
 
+    // ---- Manual pull: refresh button triggers list-files request ----
+    const handlePullFiles = () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'list-files' }));
+      }
+    };
+    document.addEventListener('texlyre-pull-files', handlePullFiles);
+
     return () => {
       closed = true;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       window.removeEventListener('resize', onResize);
       resizeObserver.disconnect();
       unsub();
+      document.removeEventListener('texlyre-pull-files', handlePullFiles);
       if (pushTimer) clearTimeout(pushTimer);
       if (ws) ws.close();
       term.dispose();

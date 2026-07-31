@@ -944,7 +944,13 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 						<button
 							className='action-btn'
 							title={t('Refresh File Tree')}
-							onClick={() => refreshFileTree()}
+							onClick={() => {
+								refreshFileTree();
+								// Pull latest files from the server (agent sync)
+								document.dispatchEvent(
+									new CustomEvent('texlyre-pull-files'),
+								);
+							}}
 						>
 							<RefreshIcon />
 						</button>
