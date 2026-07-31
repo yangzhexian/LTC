@@ -152,7 +152,7 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
-    awarenessProtocol.cleanupAwareness(awareness);
+    awareness.destroy();
     doc.off('update', updateHandler);
     connectors.delete(connector);
     console.log(`  [leave] ${docId}  (remaining: ${connectors.size})`);
