@@ -81,15 +81,7 @@ sleep 0.5
 tmux new-window -t "$SESSION" \
   "NODE_PATH=$PWD/texlyre/node_modules node server/terminal-server.js $PORT_TERM"
 
-# ---- Verify services are listening ----
 sleep 2
-for port in "$PORT_HTTP" "$PORT_WS" "$PORT_TERM"; do
-  if ss -tln 2>/dev/null | grep -q ":$port "; then
-    echo "  ✓ port $port is LISTENING"
-  else
-    echo "  ✗ port $port NOT listening — check tmux window output"
-  fi
-done
 
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
@@ -110,4 +102,16 @@ cat <<EOF
 EOF
 
 tmux kill-window -t "${SESSION}:_bootstrap" 2>/dev/null || true
-tmux attach -t "$SESSION"
+
+echo ""
+echo "Verification:"
+for port in "$PORT_HTTP" "$PORT_WS" "$PORT_TERM"; do
+  if ss -tln 2>/dev/null | grep -q ":$port "; then
+    echo "  OK   port $port is listening"
+  else
+    echo "  FAIL port $port NOT listening"
+  fi
+done
+
+echo ""
+echo "To inspect a service:  tmux attach -t $SESSION  (Ctrl+B, then window number 0/1/2)"
