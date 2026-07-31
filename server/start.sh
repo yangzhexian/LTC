@@ -48,13 +48,16 @@ if [ ! -d "texlyre/node_modules" ]; then
 fi
 
 # Apply server settings (WebSocket mode) with the real server IP
+# Desktop loads userdata.json (not userdata.local.json) — overwrite both.
+# Revert tracked copy first so git pull never conflicts.
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
-cp texlyre/userdata.server.json texlyre/userdata.local.json
-sed -i "s/__HOST_IP__/$HOST_IP/g" texlyre/userdata.local.json
+git checkout -- texlyre/userdata.json 2>/dev/null || true
+sed "s/__HOST_IP__/$HOST_IP/g" texlyre/userdata.server.json > texlyre/userdata.json
+cp texlyre/userdata.json texlyre/userdata.local.json
 echo "Server config: collab websocket = ws://$HOST_IP:$PORT_WS"
 
 # ---- Build (full pipeline: generate:plugins + tsc + vite build) ----
-BUILD_MARKER="texlyre/dist/.ltc-build-v2"
+BUILD_MARKER="texlyre/dist/.ltc-build-v3"
 if [ ! -d "texlyre/dist" ] || [ ! -f "$BUILD_MARKER" ]; then
   echo "Building TeXlyre (generate plugins + typecheck + bundle)..."
   (cd texlyre && npm run build:local)
