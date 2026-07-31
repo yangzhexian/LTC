@@ -57,7 +57,7 @@ cp texlyre/userdata.json texlyre/userdata.local.json
 echo "Server config: collab websocket = ws://$HOST_IP:$PORT_WS"
 
 # ---- Build (full pipeline: generate:plugins + tsc + vite build) ----
-BUILD_MARKER="texlyre/dist/.ltc-build-v3"
+BUILD_MARKER="texlyre/dist/.ltc-build-v4"
 if [ ! -d "texlyre/dist" ] || [ ! -f "$BUILD_MARKER" ]; then
   echo "Building TeXlyre (generate plugins + typecheck + bundle)..."
   (cd texlyre && npm run build:local)
