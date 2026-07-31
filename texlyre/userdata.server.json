@@ -4,6 +4,7 @@
     "collab-provider-type": "websocket",
     "collab-websocket-server": "ws://__HOST_IP__:8082",
     "collab-signaling-servers": "",
+    "file-sync-enable": false,
     "file-sync-server-url": "",
     "collab-auto-reconnect": true,
     "collab-awareness-timeout": 30,
