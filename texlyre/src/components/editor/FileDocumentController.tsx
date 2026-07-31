@@ -1380,6 +1380,7 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 						<LaTeXOutput
 							selectedDocId={selectedDocId}
 							documents={documents}
+							docUrl={docUrl}
 							onNavigateToLinkedFile={handleNavigateToLinkedFile}
 							onExpandLatexOutput={
 								popoutViewerService.isWindowOpen()
@@ -1406,6 +1407,7 @@ const FileDocumentControllerContent: React.FC<FileDocumentControllerProps> = ({
 						<TypstOutput
 							selectedDocId={selectedDocId}
 							documents={documents}
+							docUrl={docUrl}
 							onNavigateToLinkedFile={handleNavigateToLinkedFile}
 							onExpandTypstOutput={
 								popoutViewerService.isWindowOpen()

@@ -32,6 +32,7 @@ interface TypstOutputProps {
 	className?: string;
 	selectedDocId?: string | null;
 	documents?: Array<{ id: string; name: string }>;
+	docUrl?: string;
 	onNavigateToLinkedFile?: () => void;
 	onExpandTypstOutput?: () => void;
 	linkedFileInfo?: {
@@ -45,6 +46,7 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 	className = '',
 	selectedDocId,
 	documents,
+	docUrl,
 	onNavigateToLinkedFile,
 	onExpandTypstOutput,
 	linkedFileInfo,
@@ -525,6 +527,8 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 				<TerminalPanel
 					className='output-terminal'
 					projectId={projectId}
+					documents={documents}
+					docUrl={docUrl}
 				/>
 			</div>
 

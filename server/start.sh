@@ -47,6 +47,12 @@ if [ ! -d "texlyre/node_modules" ]; then
   (cd texlyre && npm install)
 fi
 
+# node-pty needs its native addon built; rebuild if broken (interactive shell fix)
+if ! (cd texlyre && node -e "require('node-pty')" 2>/dev/null); then
+  echo "Rebuilding node-pty (native addon)..."
+  (cd texlyre && npm rebuild node-pty 2>&1 || true)
+fi
+
 # Apply server settings (WebSocket mode) with the real server IP
 # Desktop loads userdata.json (not userdata.local.json) — overwrite both.
 # Revert tracked copy first so git pull never conflicts.

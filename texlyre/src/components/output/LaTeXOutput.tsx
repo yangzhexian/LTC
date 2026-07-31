@@ -38,6 +38,7 @@ interface LaTeXOutputProps {
 	className?: string;
 	selectedDocId?: string | null;
 	documents?: Array<{ id: string; name: string }>;
+	docUrl?: string;
 	onNavigateToLinkedFile?: () => void;
 	onExpandLatexOutput?: () => void;
 	linkedFileInfo?: {
@@ -51,6 +52,7 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 	className = '',
 	selectedDocId,
 	documents,
+	docUrl,
 	onNavigateToLinkedFile,
 	onExpandLatexOutput,
 	linkedFileInfo,
@@ -544,6 +546,8 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 				<TerminalPanel
 					className='output-terminal'
 					projectId={projectId}
+					documents={documents}
+					docUrl={docUrl}
 				/>
 			</div>
 

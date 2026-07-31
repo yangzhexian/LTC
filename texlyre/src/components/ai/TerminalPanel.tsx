@@ -4,6 +4,8 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
+import * as Y from 'yjs';
+import { IndexeddbPersistence } from 'y-indexeddb';
 import { fontSizeMap } from '../../contexts/EditorContext';
 import { useSettings } from '../../hooks/useSettings';
 import { useTheme } from '../../hooks/useTheme';
@@ -14,6 +16,8 @@ interface TerminalPanelProps {
   className?: string;
   wsUrl?: string;
   projectId?: string | null;
+  documents?: Array<{ id: string; name: string }>;
+  docUrl?: string;
 }
 
 const DARK_THEME = {
@@ -68,6 +72,8 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   className = '',
   wsUrl,
   projectId,
+  documents,
+  docUrl,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -94,17 +100,53 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const fontSize = parseInt(fontSizeMap[fontSetting as keyof typeof fontSizeMap] || '14px', 10) || 14;
 
   // ---- File sync: upload project files to server ----
+  const getDocumentContent = async (projectUrl: string, docId: string): Promise<string> => {
+    const projectId2 = projectUrl.startsWith('yjs:') ? projectUrl.slice(4) : projectUrl;
+    const dbName = `texlyre-project-${projectId2}`;
+    const docCollection = `${dbName}-yjs_${docId}`;
+    try {
+      const docYDoc = new Y.Doc();
+      const docPersistence = new IndexeddbPersistence(docCollection, docYDoc);
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => resolve(), 2000);
+        docPersistence.once('synced', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+      });
+      const text = docYDoc.getText('codemirror').toString();
+      docPersistence.destroy();
+      docYDoc.destroy();
+      return text;
+    } catch {
+      return '';
+    }
+  };
+
   const pushAllFiles = async (ws: WebSocket) => {
     if (!projectId) return;
     try {
       const files = await fileStorageService.getAllFiles(true, true, true);
+      const uploadedPaths = new Set<string>();
       let count = 0;
       for (const file of files) {
         if (file.type !== 'file' || file.isDeleted || isTemporaryFile(file.path)) continue;
         const content = file.content;
         if (typeof content !== 'string') continue;
         ws.send(JSON.stringify({ type: 'write-file', path: file.path, content }));
+        uploadedPaths.add(file.path);
         count++;
+      }
+      // Upload Yjs documents that aren't already represented as files
+      if (documents && docUrl) {
+        for (const doc of documents) {
+          const path = doc.name;
+          if (uploadedPaths.has(path)) continue;
+          const content = await getDocumentContent(docUrl, doc.id);
+          if (!content) continue;
+          ws.send(JSON.stringify({ type: 'write-file', path, content }));
+          count++;
+        }
       }
       setSyncedFiles(count);
       console.log(`[Agent] uploaded ${count} files to server`);
