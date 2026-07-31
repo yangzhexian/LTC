@@ -87,6 +87,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const { getSetting } = useSettings();
   const { isCurrentVariantDark } = useTheme();
 
+  // Refs so pushAllFiles always sees the latest documents/docUrl
+  // (the effect closure captures stale values on first mount)
+  const documentsRef = useRef(documents);
+  documentsRef.current = documents;
+  const docUrlRef = useRef(docUrl);
+  docUrlRef.current = docUrl;
+
   // Working directory: ~/Projects/<projectId> — resolved server-side against $HOME
   const cwd = projectId ? `Projects/${projectId}` : '';
 
@@ -138,8 +145,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         count++;
       }
       // Upload Yjs documents that aren't already represented as files
-      if (documents && docUrl) {
-        for (const doc of documents) {
+      const docs = documentsRef.current || [];
+      const docUrl = docUrlRef.current;
+      if (docs.length > 0 && docUrl) {
+        for (const doc of docs) {
           const path = doc.name;
           if (uploadedPaths.has(path)) continue;
           const content = await getDocumentContent(docUrl, doc.id);
@@ -305,13 +314,22 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     if (!term) return;
     term.options.theme = isCurrentVariantDark ? DARK_THEME : LIGHT_THEME;
   }, [isCurrentVariantDark]);
-
   // Apply font size changes
   useEffect(() => {
     const term = termRef.current;
     if (!term) return;
     term.options.fontSize = fontSize;
   }, [fontSize]);
+
+  // Re-push files when the document list changes (e.g. new document created,
+  // or documents finished loading after the terminal connected)
+  useEffect(() => {
+    if (!documents || documents.length === 0) return;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      pushAllFiles(ws);
+    }
+  }, [documents]);
 
   // Fit when size changes
   useEffect(() => {
