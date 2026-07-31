@@ -256,11 +256,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         : content;
       const cacheValue = encoding === 'base64' ? content : content;
 
-      const files = await fileStorageService.getAllFiles(true, false, false);
-      let target = files.find(
-        (f) => f.type === 'file' && f.path === texlyrePath && !f.isDeleted,
-      );
-
       if (!target) {
         // New file created by the agent on the server — create it in the browser
         const name = cleanPath.split('/').pop() || cleanPath;
