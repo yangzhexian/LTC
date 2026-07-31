@@ -34,3 +34,4 @@ texlyre/.env
 
 # ---- Server ----
 server/.yjs-data/
+.yjs-data/
