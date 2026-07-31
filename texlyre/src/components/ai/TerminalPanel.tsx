@@ -6,7 +6,7 @@ import '@xterm/xterm/css/xterm.css';
 
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
-import { fontFamilyMap, fontSizeMap } from '../../contexts/EditorContext';
+import { fontSizeMap } from '../../contexts/EditorContext';
 import { useSettings } from '../../hooks/useSettings';
 import { useTheme } from '../../hooks/useTheme';
 import { fileStorageEventEmitter, fileStorageService } from '../../services/FileStorageService';
@@ -107,12 +107,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const fontSetting = (getSetting('editor-font-size')?.value as string) || 'base';
   const fontSize = parseInt(fontSizeMap[fontSetting as keyof typeof fontSizeMap] || '14px', 10) || 14;
 
-  // Terminal font: follow editor font family when it's a monospace family,
-  // otherwise use the default monospace stack
-  const familySetting = (getSetting('editor-font-family')?.value as string) || 'monospace';
-  const DEFAULT_MONO =
-    "ui-monospace, 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Noto Sans Mono', monospace";
-  const fontFamily = fontFamilyMap[familySetting as keyof typeof fontFamilyMap] || DEFAULT_MONO;
+  // Fixed terminal font: common sans-serif monospace stack (system fonts,
+  // no download needed). Does NOT follow the editor font setting.
+  const fontFamily =
+    "'Cascadia Code', 'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'DejaVu Sans Mono', 'Ubuntu Mono', 'Liberation Mono', monospace";
 
   // ---- File sync: upload project files to server ----
   const getDocumentContent = async (projectUrl: string, docId: string): Promise<string> => {
@@ -529,13 +527,6 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
     if (!term) return;
     term.options.fontSize = fontSize;
   }, [fontSize]);
-
-  // Apply font family changes
-  useEffect(() => {
-    const term = termRef.current;
-    if (!term) return;
-    term.options.fontFamily = fontFamily;
-  }, [fontFamily]);
 
   // Re-push files when the document list changes (e.g. new document created,
   // or documents finished loading after the terminal connected)
