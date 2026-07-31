@@ -74,7 +74,7 @@ tmux new-session -d -s "$SESSION" -n "texlyre" \; \
 sleep 1
 
 tmux new-window -t "$SESSION" -n "yjs-ws" \; \
-  send-keys "cd texlyre && node ../server/yjs-ws-server.js $PORT_WS" Enter
+  send-keys "NODE_PATH=$(pwd)/texlyre/node_modules node server/yjs-ws-server.js $PORT_WS" Enter
 
 sleep 0.5
 
