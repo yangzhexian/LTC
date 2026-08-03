@@ -672,6 +672,25 @@ class AuthService {
 		return newProject;
 	}
 
+	// Tier 1 migration: register ALL local projects with the server (idempotent).
+	// Used after signing in so pre-Tier-1 projects created in the browser are
+	// accessible again — the signer becomes owner (projects already registered
+	// to someone else are skipped server-side). No-op when not signed in.
+	async syncProjectsToServer(): Promise<void> {
+		try {
+			const projects = await this.getProjects();
+			if (projects.length === 0) return;
+			const { registerProject } = await import('./ServerAuthService');
+			await Promise.all(
+				projects.map((project) =>
+					registerProject(project.id, project.name).catch(() => {}),
+				),
+			);
+		} catch (error) {
+			moduleLog.warn('Failed to sync projects to server:', error);
+		}
+	}
+
 	async updateProject(project: Project): Promise<Project> {
 		if (!this.db) await this.initialize();
 

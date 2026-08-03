@@ -296,14 +296,22 @@ async function startApp() {
 	// Valid server session → straight into the app (no login screen)
 	const session = await me().catch(() => null);
 	if (session) {
-		renderApp(rootEl);
+		// Tier 1 migration: register pre-existing local projects with the
+		// server (idempotent) so they aren't rejected by ACL.
+		void authService.syncProjectsToServer().finally(() => renderApp(rootEl));
 		return;
 	}
 
 	ReactDOM.createRoot(rootEl).render(
 		<React.StrictMode>
 			<ServerAuthGate
-				onAuthed={() => renderApp(rootEl)}
+				onAuthed={() => {
+					// Tier 1 migration: register pre-existing local projects with
+					// the server before entering, so they aren't rejected by ACL.
+					void authService
+						.syncProjectsToServer()
+						.finally(() => renderApp(rootEl));
+				}}
 				onSkip={() => renderApp(rootEl)}
 			/>
 		</React.StrictMode>,

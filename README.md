@@ -126,8 +126,13 @@ share <projectId> <username>         unshare <projectId> <username>
 Notes:
 - `server/.terminal-token` still exists but is **server-internal only**
   (terminal → yjs `/apply-file` bridge); it is no longer shipped to browsers.
-- Migration: projects created before Tier 1 are unregistered — register them
-  with the CLI (`register-project <id> <owner>`) or re-create them.
+- **Migrating from before Tier 1**: browser-local accounts cannot be imported
+  (passwords were SHA-256 hashed in the browser and are unrecoverable) —
+  users simply re-register with the invite code (or the admin runs
+  `create-user`), keeping the same username if desired. Their projects are
+  registered automatically on first sign-in (`syncProjectsToServer`), and
+  projects created by other accounts can be migrated with the CLI:
+  `register-project <id> <owner>`.
 - Remaining roadmap: per-OS-user terminal isolation, TLS reverse proxy,
   connection rate limits, audit log.
 
