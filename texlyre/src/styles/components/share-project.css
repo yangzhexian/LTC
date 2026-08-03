@@ -171,6 +171,8 @@
 	justify-content: space-between;
 	gap: var(--space-sm);
 	padding: var(--space-xs) var(--space-sm);
+	min-height: 42px;
+	box-sizing: border-box;
 	background-color: var(--pico-secondary-background);
 	border: 1px solid var(--accent-border);
 	border-radius: var(--radius-sm);
@@ -182,6 +184,7 @@
 	gap: var(--space-sm);
 	font-size: 0.85rem;
 	color: var(--text-color);
+	line-height: 1;
 }
 
 .share-member-owner {
@@ -189,57 +192,33 @@
 	color: var(--pico-primary);
 	border: 1px solid var(--pico-primary);
 	border-radius: var(--radius-sm);
-	padding: 1px var(--space-xs);
+	padding: 2px var(--space-xs);
 }
 
 .share-member-remove {
-	background: none;
+	background-color: #dc3545;
+	color: #fff;
 	border: none;
-	color: var(--pico-red, #c53030);
+	border-radius: 6px;
+	padding: 6px 14px;
 	font-size: 0.75rem;
+	line-height: 1;
 	cursor: pointer;
-	text-decoration: underline;
-	padding: 0;
 }
 
-.share-member-remove:hover {
-	opacity: 0.8;
+.share-member-remove:hover:not(:disabled) {
+	background-color: #c53030;
+}
+
+.share-member-remove:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 
 .share-members-loading {
 	margin: 0;
 	color: var(--pico-secondary);
 	font-size: 0.8rem;
-}
-
-.share-invite-form {
-	display: flex;
-	gap: var(--space-sm);
-}
-
-.share-invite-input {
-	flex: 1;
-	padding: var(--space-xs) var(--space-sm);
-	border: 1px solid var(--accent-border);
-	border-radius: var(--radius-sm);
-	background-color: var(--pico-background);
-	color: var(--text-color);
-	font-size: 0.85rem;
-}
-
-.share-invite-button {
-	padding: var(--space-xs) var(--space-md);
-	background-color: var(--pico-primary);
-	color: #fff;
-	border: none;
-	border-radius: var(--radius-sm);
-	cursor: pointer;
-	font-size: 0.85rem;
-}
-
-.share-invite-button:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
 }
 
 .share-message {
