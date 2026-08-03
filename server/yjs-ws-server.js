@@ -20,10 +20,6 @@ const PERSIST_DIR = path.join(__dirname, '..', '.yjs-data');
 // Shared auth token (Tier 1: server-internal only — terminal-server → us,
 // for the /apply-file bridge). NOT distributed to browsers anymore.
 const TERMINAL_TOKEN = process.env.TERMINAL_TOKEN || '';
-// Site access token (web UI entry gate): entered at server startup, the
-// frontend must verify against GET /api/site-access before rendering.
-// Empty string = gate disabled.
-const SITE_TOKEN = process.env.SITE_TOKEN || '';
 // Tier 1: server-side accounts + sessions + project ACL
 const auth = require('./auth');
 auth.init();
@@ -42,59 +38,8 @@ function parseProjectId(room) {
   return m ? m[1] : null;
 }
 
-// ---- Site access gate (web UI entry token) ----
-// Simple per-IP throttle: after N wrong tokens, block the IP for a while.
-const SITE_MAX_FAILURES = 10;
-const SITE_BLOCK_MS = 10 * 60 * 1000;
-const siteFailures = new Map(); // ip → { count, until }
-
-function siteAccessHandler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Content-Type', 'application/json');
-
-  // No token configured on the server → gate open
-  if (!SITE_TOKEN) {
-    res.writeHead(200);
-    res.end(JSON.stringify({ ok: true }));
-    return;
-  }
-
-  const ip = req.socket?.remoteAddress || 'unknown';
-  const entry = siteFailures.get(ip) || { count: 0, until: 0 };
-
-  if (Date.now() < entry.until) {
-    res.writeHead(429);
-    res.end(JSON.stringify({ ok: false, error: 'too many attempts' }));
-    return;
-  }
-
-  let token = '';
-  try {
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    token = url.searchParams.get('token') || '';
-  } catch {}
-
-  if (token === SITE_TOKEN) {
-    siteFailures.delete(ip);
-    res.writeHead(200);
-    res.end(JSON.stringify({ ok: true }));
-    return;
-  }
-
-  entry.count += 1;
-  if (entry.count >= SITE_MAX_FAILURES) {
-    entry.until = Date.now() + SITE_BLOCK_MS;
-    entry.count = 0;
-    console.log(`  [auth] site access blocked for ${ip} (${SITE_MAX_FAILURES} failed attempts)`);
-  }
-  siteFailures.set(ip, entry);
-  console.log(`  [auth] REJECTED site access from ${ip} (wrong site token, attempt ${entry.count})`);
-  res.writeHead(403);
-  res.end(JSON.stringify({ ok: false }));
-}
-
 // ---- Tier 1: account / session / project ACL endpoints ----
-// Same per-IP throttle as the site gate (shared buckets for login attempts).
+// Per-IP throttle for login attempts.
 const loginFailures = new Map(); // ip → { count, until }
 const LOGIN_MAX_FAILURES = 10;
 const LOGIN_BLOCK_MS = 10 * 60 * 1000;
@@ -263,6 +208,9 @@ function handleAuthApi(req, res, pathname, query) {
       return;
     }
   }
+
+  // Unknown /api/* path
+  json(res, 404, { ok: false, error: 'not found' });
 }
 
 // Never crash the process on unhandled errors — log and keep serving
@@ -406,13 +354,6 @@ function applyToLinkedDoc(projectId, relPath, content) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const pathname = url.pathname;
-
-  // Web UI entry gate: the frontend verifies the site access token here
-  // before rendering the app (GET /api/site-access?token=...)
-  if (req.method === 'GET' && pathname === '/api/site-access') {
-    siteAccessHandler(req, res);
-    return;
-  }
 
   // Tier 1: accounts, sessions, project ACL
   if (pathname.startsWith('/api/')) {

@@ -95,27 +95,22 @@ via Yjs; other files via the file channel).
 
 ### Security (Tier 1)
 
-Three layers protect the server:
+Two layers protect the server:
 
-**1. Web UI entry gate** — the app's first screen asks for a **site access
-token**; strangers who know the IP cannot even open the login page without it.
-Entered at server startup (`bash server/start.sh` prompts for it; persisted in
-`server/.site-token`, git-ignored, verified server-side via
-`GET http://<ip>:8082/api/site-access?token=...` with per-IP throttling after
-10 wrong attempts). Browsers that verify once are remembered (localStorage).
-Leave empty to disable.
-
-**2. Server-side accounts + sessions** — after the gate, users must sign in
-with a **server account** (register requires the admin's **invite code**, set
-at startup in `server/.invite-code`, or accounts can be pre-created with the
-admin CLI). Login issues a random session token (7-day expiry, scrypt-hashed
-passwords, files stored in `server/.users.json` / `server/.sessions.json`,
-git-ignored). All WebSocket connections (Yjs sync + terminal) must present
-`?session=...` — **the session token is never baked into the web app**, so the
-devtools/localStorage tricks from Tier 0 no longer grant server access. Users
+**1. Server-side accounts + sessions** — the web app opens on a **login
+screen**: visitors must sign in with a **server account** (register requires
+the admin's **invite code**, set at startup in `server/.invite-code`, or
+accounts can be pre-created with the admin CLI). Login issues a random
+session token (7-day sliding expiry, scrypt-hashed passwords, files stored in
+`server/.users.json` / `server/.sessions.json`, git-ignored). All WebSocket
+connections (Yjs sync + terminal) must present `?session=...` — **the session
+token is never baked into the web app**. Sessions are remembered in
+localStorage: returning browsers skip the login screen entirely, the session
+heartbeat keeps active sessions alive (no mid-work logouts), and invalidated
+sessions return you to the login screen instead of failing silently. Users
 without a session can still open the app in local-only mode ("use locally").
 
-**3. Project ACL** — projects are registered server-side on creation
+**2. Project ACL** — projects are registered server-side on creation
 (`POST /api/projects`, owner = creator, stored in `server/.projects.json`).
 Yjs rooms and terminal working directories are only accessible to the owner
 and invited members (`share`/`unshare` endpoints or the admin CLI). Unregistered

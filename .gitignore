@@ -25,7 +25,6 @@ texlyre/public/core/busytex/
 server/.yjs-data/
 .yjs-data/
 server/.terminal-token
-server/.site-token
 server/.invite-code
 server/.users.json
 server/.sessions.json

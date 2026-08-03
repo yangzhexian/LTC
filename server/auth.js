@@ -163,6 +163,11 @@ function logoutToken(token) {
 
 // ---- session validation ----
 // Returns the username or null. Lazily purges expired sessions.
+// Sliding expiry: an active session that has less than 24h left is extended
+// back to the full TTL, so active users never get logged out mid-work.
+// (This is a rare write — at most once per ~6 days per active user.)
+const SLIDING_EXTEND_MS = 24 * 60 * 60 * 1000;
+
 function validateSession(token) {
   if (typeof token !== 'string' || token.length < 32) return null;
   const sessions = loadSessions();
@@ -172,6 +177,10 @@ function validateSession(token) {
     delete sessions[token];
     saveSessions(sessions);
     return null;
+  }
+  if (session.expiresAt - Date.now() < SLIDING_EXTEND_MS) {
+    session.expiresAt = Date.now() + SESSION_TTL_MS;
+    saveSessions(sessions);
   }
   return session.username;
 }

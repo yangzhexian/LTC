@@ -3,9 +3,22 @@
 // The session token obtained here is what browsers present on ALL server
 // WebSocket connections (yjs sync + terminal) — it is never baked into the
 // bundle, so strangers who know the IP cannot bypass it via devtools.
-import { getSiteAccessBaseUrl } from '../components/SiteAccessGate';
 
 const SESSION_KEY = 'texlyre-server-session';
+
+// Base URL of the yjs-ws-server, derived from the collab WebSocket setting
+// (ws://host:8082 → http://host:8082), falling back to port 8082 on the
+// current host. All account/ACL API calls go here.
+export function getServerApiBaseUrl(): string {
+	try {
+		const stored = localStorage.getItem('texlyre-settings');
+		const ws = stored ? JSON.parse(stored)['collab-websocket-server'] : '';
+		if (typeof ws === 'string' && ws) {
+			return ws.replace(/^ws:\/\//, 'http://').replace(/\/+$/, '');
+		}
+	} catch {}
+	return `http://${window.location.hostname}:8082`;
+}
 
 export interface ServerSession {
 	token: string;
@@ -39,7 +52,7 @@ async function api<T>(
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), options?.timeoutMs ?? 8000);
 	try {
-		const res = await fetch(`${getSiteAccessBaseUrl()}${path}`, {
+		const res = await fetch(`${getServerApiBaseUrl()}${path}`, {
 			method: options?.method ?? 'GET',
 			headers: options?.body ? { 'Content-Type': 'application/json' } : undefined,
 			body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -145,4 +158,27 @@ export async function listProjects(): Promise<
 		`/api/projects?token=${encodeURIComponent(session.token)}`,
 	);
 	return result?.projects ?? [];
+}
+
+// ---- session heartbeat ----
+// Keeps the server session alive while the app is open (each me() call also
+// triggers the server's sliding expiry) and detects when the session was
+// invalidated elsewhere (e.g. admin revoked it) or expired: on 401 the app
+// clears the session and reloads so the login screen appears instead of
+// silently failing WebSocket reconnects.
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+export function startSessionHeartbeat(intervalMs = 60_000): void {
+	if (heartbeatTimer) return;
+	if (!getServerSession()) return;
+	heartbeatTimer = setInterval(async () => {
+		if (document.visibilityState === 'hidden') return; // skip in background tabs
+		const hadSession = !!getServerSession();
+		if (!hadSession) return;
+		const session = await me().catch(() => null);
+		if (!session && hadSession) {
+			clearServerSession();
+			window.location.reload();
+		}
+	}, intervalMs);
 }

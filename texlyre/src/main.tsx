@@ -36,13 +36,8 @@ import { openDB } from 'idb';
 
 import './i18n';
 import App from './App';
-import SiteAccessGate, {
-	checkSiteAccess,
-	isSiteAccessVerified,
-	type SiteAccessResult,
-} from './components/SiteAccessGate';
 import ServerAuthGate from './components/ServerAuthGate';
-import { me } from './services/ServerAuthService';
+import { me, startSessionHeartbeat } from './services/ServerAuthService';
 import { authService } from './services/AuthService';
 import { createNamedLogger } from '@/logging';
 
@@ -271,11 +266,13 @@ function setupDirection() {
 	document.documentElement.setAttribute('dir', direction);
 }
 
-// ---- Site access gate + server login ----
-// The app stays locked until the visitor passes the site access token screen
-// (if configured) and has a valid server session (Tier 1 accounts). A
-// verified browser is remembered in localStorage so refreshes don't re-ask.
+// ---- Server login gate ----
+// The app stays locked behind the login screen until the visitor has a valid
+// server session (Tier 1 accounts). A valid session is remembered in
+// localStorage, so returning browsers skip straight into the app; the
+// session heartbeat keeps it alive while the app is open.
 function renderApp(rootEl: HTMLElement) {
+	startSessionHeartbeat();
 	ReactDOM.createRoot(rootEl).render(
 		<React.StrictMode>
 			<App />
@@ -296,43 +293,13 @@ async function startApp() {
 
 	const rootEl = document.getElementById('root')!;
 
-	// Already verified in this browser (or the gate is disabled server-side —
-	// checkSiteAccess('') returns granted when no token is configured).
-	if (isSiteAccessVerified()) {
-		await startAppWithSession(rootEl);
-		return;
-	}
-
-	const initialStatus: SiteAccessResult = await checkSiteAccess('')
-		.then((r) => r)
-		.catch(() => 'unreachable' as SiteAccessResult);
-
-	if (initialStatus === 'granted') {
-		localStorage.setItem('texlyre-site-access-verified', '1');
-		await startAppWithSession(rootEl);
-		return;
-	}
-
-	ReactDOM.createRoot(rootEl).render(
-		<React.StrictMode>
-			<SiteAccessGate
-				initialStatus={initialStatus}
-				onUnlocked={() => {
-					localStorage.setItem('texlyre-site-access-verified', '1');
-					void startAppWithSession(rootEl);
-				}}
-			/>
-		</React.StrictMode>,
-	);
-}
-
-// Tier 1: require a valid server session (or let the user continue locally).
-async function startAppWithSession(rootEl: HTMLElement) {
+	// Valid server session → straight into the app (no login screen)
 	const session = await me().catch(() => null);
 	if (session) {
 		renderApp(rootEl);
 		return;
 	}
+
 	ReactDOM.createRoot(rootEl).render(
 		<React.StrictMode>
 			<ServerAuthGate
