@@ -11,7 +11,7 @@ import {
 } from '../services/ServerAuthService';
 
 interface ServerAuthGateProps {
-	onAuthed: () => void;
+	onAuthed: (username: string) => void;
 	onSkip: () => void;
 }
 
@@ -36,7 +36,7 @@ const ServerAuthGate: React.FC<ServerAuthGateProps> = ({ onAuthed, onSkip }) => 
 				const result = await login(username.trim(), password);
 				if (result.ok && result.token) {
 					setServerSession({ token: result.token, username: result.user!.username });
-					onAuthed();
+					onAuthed(result.user!.username);
 					return;
 				}
 				setError(result.error || 'Login failed');
@@ -44,7 +44,7 @@ const ServerAuthGate: React.FC<ServerAuthGateProps> = ({ onAuthed, onSkip }) => 
 				const result = await register(username.trim(), password, inviteCode.trim());
 				if (result.ok && result.token) {
 					setServerSession({ token: result.token, username: result.user!.username });
-					onAuthed();
+					onAuthed(result.user!.username);
 					return;
 				}
 				setError(result.error || 'Registration failed');

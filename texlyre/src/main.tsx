@@ -280,6 +280,38 @@ function renderApp(rootEl: HTMLElement) {
 	);
 }
 
+// Tier 1: after a server login, make sure the browser-local account exists as
+// a full (non-guest) account so the TeXlyre UI does not ask to register
+// again. The local password is random — server sessions are the real auth.
+async function ensureLocalAccount(username: string): Promise<void> {
+	try {
+		const current = authService.getCurrentUser();
+		if (current && !current.isGuest) return;
+
+		const existing = await authService.getUserByUsername(username);
+		if (existing && !existing.isGuest) {
+			await authService.setCurrentUser(existing.id);
+			return;
+		}
+
+		const randomPassword = `${crypto.randomUUID().replace(/-/g, '')}!aA1`;
+		if (current?.isGuest) {
+			await authService.upgradeGuestAccount(username, randomPassword);
+		} else {
+			await authService.register(username, randomPassword);
+		}
+	} catch (error) {
+		moduleLog.warn('ensureLocalAccount failed:', error);
+	}
+}
+
+async function enterApp(rootEl: HTMLElement, serverUsername: string) {
+	// Local account first, then register pre-existing projects with the server
+	await ensureLocalAccount(serverUsername);
+	await authService.syncProjectsToServer().catch(() => {});
+	renderApp(rootEl);
+}
+
 async function startApp() {
 	try {
 		await Promise.all([
@@ -296,22 +328,14 @@ async function startApp() {
 	// Valid server session → straight into the app (no login screen)
 	const session = await me().catch(() => null);
 	if (session) {
-		// Tier 1 migration: register pre-existing local projects with the
-		// server (idempotent) so they aren't rejected by ACL.
-		void authService.syncProjectsToServer().finally(() => renderApp(rootEl));
+		void enterApp(rootEl, session.username);
 		return;
 	}
 
 	ReactDOM.createRoot(rootEl).render(
 		<React.StrictMode>
 			<ServerAuthGate
-				onAuthed={() => {
-					// Tier 1 migration: register pre-existing local projects with
-					// the server before entering, so they aren't rejected by ACL.
-					void authService
-						.syncProjectsToServer()
-						.finally(() => renderApp(rootEl));
-				}}
+				onAuthed={(username) => void enterApp(rootEl, username)}
 				onSkip={() => renderApp(rootEl)}
 			/>
 		</React.StrictMode>,

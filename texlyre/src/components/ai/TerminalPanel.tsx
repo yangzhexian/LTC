@@ -515,9 +515,30 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         term.write(event.data);
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         setIsConnected(false);
         if (!closed) {
+          // Tier 1: the server rejected us (4001) — surface the real reason
+          // instead of reconnecting forever.
+          if (event?.code === 4001) {
+            const reason = String(event.reason || '');
+            if (reason.includes('member')) {
+              term.write(
+                '\r\n\x1b[31m[Agent] access denied — you are not a member of this project.\x1b[0m\r\n',
+              );
+              term.write(
+                '\x1b[33m[Agent] Ask the project owner to invite your server account.\x1b[0m\r\n\r\n',
+              );
+            } else {
+              term.write(
+                '\r\n\x1b[31m[Agent] your session is no longer valid.\x1b[0m\r\n',
+              );
+              term.write(
+                '\x1b[33m[Agent] Reload the page and sign in again.\x1b[0m\r\n\r\n',
+              );
+            }
+            return;
+          }
           term.write('\r\n\x1b[31mDisconnected — reconnecting...\x1b[0m\r\n');
           reconnectTimer = setTimeout(connect, 2000);
         }

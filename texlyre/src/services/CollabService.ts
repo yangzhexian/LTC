@@ -14,11 +14,17 @@ import type {
 } from '../types/collab';
 import type { YjsDocUrl } from '../types/yjs';
 import { parseUrlFragments } from '../utils/urlUtils';
+import { t } from '@/i18n';
+import { createNamedLogger } from '@/logging';
+import { notificationService } from './NotificationService';
 import { getServerSession } from './ServerAuthService';
 import { offlineService } from './OfflineService';
-import { createNamedLogger } from '@/logging';
 
 const moduleLog = createNamedLogger('CollabService');
+
+// Rooms already flagged with an access-denied toast (avoid spam: every
+// project opens several rooms — metadata, chat, file_sync, documents).
+const accessDeniedRooms = new Set<string>();
 
 interface OfflineDocContainer {
 	doc: Y.Doc;
@@ -261,10 +267,31 @@ class CollabService {
 		const session = getServerSession();
 		if (session && !params.session) params.session = session.token;
 
-		return collabWebsocket.getProvider(roomName, doc, {
+		const provider = collabWebsocket.getProvider(roomName, doc, {
 			serverUrl,
 			params,
 		});
+
+		// Tier 1: surface access denials (4001) — e.g. opening a project you
+		// are not a member of. Shown once per room to avoid toast spam.
+		if (!accessDeniedRooms.has(roomName)) {
+			provider.on(
+				'connection-close',
+				(event: { code?: number; reason?: string }) => {
+					if (event?.code !== 4001 || accessDeniedRooms.has(roomName)) return;
+					accessDeniedRooms.add(roomName);
+					const reason = String(event.reason || '');
+					const message = reason.includes('member')
+						? t(
+								'You are not a member of this project. Ask the project owner to invite your server account.',
+							)
+						: t('Your session is no longer valid. Reload the page to sign in again.');
+					notificationService.showError(message, { duration: 8000 });
+				},
+			);
+		}
+
+		return provider;
 	}
 
 	public setUserInfo(docId: string, collectionName: string, user: User): void {
