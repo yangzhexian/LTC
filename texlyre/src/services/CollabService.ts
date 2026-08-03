@@ -17,7 +17,7 @@ import { parseUrlFragments } from '../utils/urlUtils';
 import { t } from '@/i18n';
 import { createNamedLogger } from '@/logging';
 import { notificationService } from './NotificationService';
-import { getServerSession } from './ServerAuthService';
+import { getServerSession, joinProject } from './ServerAuthService';
 import { offlineService } from './OfflineService';
 
 const moduleLog = createNamedLogger('CollabService');
@@ -301,21 +301,43 @@ class CollabService {
 		// are not a member of. Deduplicated PER PROJECT in localStorage with a
 		// 1h window, so a removed member isn't spammed with toasts on every
 		// reconnect/refresh (several rooms per project used to fire together).
+		// First-join race: opening a share link fires room connections before
+		// the join request completes — auto-join before warning the user.
 		if (!deniedListenerAttached.has(provider)) {
 			deniedListenerAttached.add(provider);
 			provider.on(
 				'connection-close',
 				(event: { code?: number; reason?: string }) => {
 					if (event?.code !== 4001) return;
-					const dedupeKey = projectIdFromRoom(roomName) || roomName;
+					const pid = projectIdFromRoom(roomName);
+					const dedupeKey = pid || roomName;
 					if (accessDeniedRecentlyShown(dedupeKey)) return;
 					const reason = String(event.reason || '');
-					const message = reason.includes('member')
-						? t(
-								'You are not a member of this project. Open it via its share link while signed in to join automatically.',
-							)
-						: t('Your session is no longer valid. Reload the page to sign in again.');
-					notificationService.showError(message, { duration: 8000 });
+
+					const showDeniedToast = () => {
+						const message = reason.includes('member')
+							? t(
+									'You are not a member of this project. Open it via its share link while signed in to join automatically.',
+								)
+							: t('Your session is no longer valid. Reload the page to sign in again.');
+						notificationService.showError(message, { duration: 8000 });
+					};
+
+					if (reason.includes('member') && pid) {
+						void joinProject(pid)
+							.then((res) => {
+								if (res.ok) {
+									// Membership granted — reconnect immediately,
+									// no denial toast needed.
+									provider.connect();
+									return;
+								}
+								showDeniedToast();
+							})
+							.catch(showDeniedToast);
+						return;
+					}
+					showDeniedToast();
 				},
 			);
 		}
