@@ -784,6 +784,7 @@ const EditorAppView: React.FC<EditorAppProps> = ({
 				onClose={() => setShowShareModal(false)}
 				projectName={projectName}
 				shareUrl={shareUrl}
+				projectId={docUrl.startsWith('yjs:') ? docUrl.slice(4) : docUrl}
 			/>
 
 			{!isGuestUser(user) && (

@@ -157,7 +157,7 @@ function handleAuthApi(req, res, pathname, query) {
   }
 
   // ---- project ACL ----
-  if (pathname === '/api/projects' || pathname === '/api/projects/share' || pathname === '/api/projects/unshare') {
+  if (pathname === '/api/projects' || pathname === '/api/projects/share' || pathname === '/api/projects/unshare' || pathname === '/api/projects/members') {
     const requireUser = (token, cb) => {
       const username = token ? auth.validateSession(token) : null;
       if (!username) {
@@ -166,6 +166,26 @@ function handleAuthApi(req, res, pathname, query) {
       }
       cb(username);
     };
+
+    if (req.method === 'GET' && pathname === '/api/projects/members') {
+      requireUser(query.get('token'), (username) => {
+        const project = auth.getProject(query.get('id'));
+        if (!project) {
+          json(res, 404, { ok: false, error: 'project not found' });
+          return;
+        }
+        // Members-only: non-members must not see who else is in the project
+        if (!auth.isProjectMember(query.get('id'), username)) {
+          json(res, 403, { ok: false, error: 'not a project member' });
+          return;
+        }
+        json(res, 200, {
+          ok: true,
+          project: { id: query.get('id'), name: project.name, owner: project.owner, members: project.members },
+        });
+      });
+      return;
+    }
 
     if (req.method === 'POST' && pathname === '/api/projects') {
       readBody(req, res, (b) => {

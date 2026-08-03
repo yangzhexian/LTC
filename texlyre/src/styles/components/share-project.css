@@ -140,3 +140,117 @@
 	margin-left: auto;
 	opacity: 0.7;
 }
+
+/* ---- server members (Tier 1) ---- */
+.share-members-section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-sm);
+}
+
+.share-members-section > label {
+	font-weight: 500;
+	color: var(--text-color);
+	font-size: 0.9rem;
+}
+
+.share-members-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xs);
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.share-member-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-sm);
+	padding: var(--space-xs) var(--space-sm);
+	background-color: var(--pico-secondary-background);
+	border: 1px solid var(--accent-border);
+	border-radius: var(--radius-sm);
+}
+
+.share-member-name {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	font-size: 0.85rem;
+	color: var(--text-color);
+}
+
+.share-member-owner {
+	font-size: 0.65rem;
+	color: var(--pico-primary);
+	border: 1px solid var(--pico-primary);
+	border-radius: var(--radius-sm);
+	padding: 1px var(--space-xs);
+}
+
+.share-member-remove {
+	background: none;
+	border: none;
+	color: var(--pico-red, #c53030);
+	font-size: 0.75rem;
+	cursor: pointer;
+	text-decoration: underline;
+	padding: 0;
+}
+
+.share-member-remove:hover {
+	opacity: 0.8;
+}
+
+.share-members-loading {
+	margin: 0;
+	color: var(--pico-secondary);
+	font-size: 0.8rem;
+}
+
+.share-invite-form {
+	display: flex;
+	gap: var(--space-sm);
+}
+
+.share-invite-input {
+	flex: 1;
+	padding: var(--space-xs) var(--space-sm);
+	border: 1px solid var(--accent-border);
+	border-radius: var(--radius-sm);
+	background-color: var(--pico-background);
+	color: var(--text-color);
+	font-size: 0.85rem;
+}
+
+.share-invite-button {
+	padding: var(--space-xs) var(--space-md);
+	background-color: var(--pico-primary);
+	color: #fff;
+	border: none;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	font-size: 0.85rem;
+}
+
+.share-invite-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.share-message {
+	margin: 0;
+	font-size: 0.8rem;
+}
+
+.share-message.success {
+	color: var(--pico-success, #28a745);
+}
+
+.share-message.error {
+	color: var(--pico-red, #c53030);
+}

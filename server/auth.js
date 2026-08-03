@@ -242,6 +242,10 @@ function isProjectMember(projectId, username) {
   return project.owner === username || project.members.includes(username);
 }
 
+function getProject(projectId) {
+  return loadProjects()[projectId] || null;
+}
+
 module.exports = {
   init,
   registerUser,
@@ -253,6 +257,7 @@ module.exports = {
   unshareProject,
   listProjectsFor,
   isProjectMember,
+  getProject,
   isValidUsername,
   isValidPassword,
   USERS_FILE,

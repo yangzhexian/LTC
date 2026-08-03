@@ -160,6 +160,21 @@ export async function listProjects(): Promise<
 	return result?.projects ?? [];
 }
 
+export interface ProjectMembers {
+	id: string;
+	name: string;
+	owner: string;
+	members: string[];
+}
+
+export async function getProjectMembers(
+	projectId: string,
+): Promise<{ ok: boolean; project?: ProjectMembers; error?: string }> {
+	const session = getServerSession();
+	if (!session) return { ok: false, error: 'not signed in' };
+	return api(`/api/projects/members?token=${encodeURIComponent(session.token)}&id=${encodeURIComponent(projectId)}`);
+}
+
 // ---- session heartbeat ----
 // Keeps the server session alive while the app is open (each me() call also
 // triggers the server's sliding expiry) and detects when the session was
