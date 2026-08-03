@@ -200,6 +200,26 @@ function registerProject(projectId, name, owner) {
   return { ok: true, project };
 }
 
+// Link-based join: anyone who opens a project link (projectId is an
+// unguessable UUID) automatically becomes a member — no manual invite needed.
+// Unknown projects are claimed by the first joiner (becomes owner).
+function joinProject(projectId, username) {
+  if (typeof projectId !== 'string' || !projectId) {
+    return { ok: false, error: 'missing project id' };
+  }
+  const projects = loadProjects();
+  const project = projects[projectId];
+  if (!project) {
+    return registerProject(projectId, '', username);
+  }
+  if (!project.members.includes(username)) {
+    project.members.push(username);
+    saveProjects(projects);
+    console.log(`  [acl] ${username} joined ${projectId} via link`);
+  }
+  return { ok: true, project };
+}
+
 function shareProject(projectId, username, actor) {
   const projects = loadProjects();
   const project = projects[projectId];
@@ -253,6 +273,7 @@ module.exports = {
   logoutToken,
   validateSession,
   registerProject,
+  joinProject,
   shareProject,
   unshareProject,
   listProjectsFor,

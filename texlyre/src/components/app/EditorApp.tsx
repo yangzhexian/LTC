@@ -145,6 +145,16 @@ const EditorAppView: React.FC<EditorAppProps> = ({
 
 	useGlobalKeyboard();
 
+	// Tier 1: link-based membership — opening a project automatically adds the
+	// signed-in user as a member (idempotent), so no manual invite is needed.
+	const projectId = docUrl.startsWith('yjs:') ? docUrl.slice(4) : docUrl;
+	useEffect(() => {
+		if (!projectId) return;
+		import('../../services/ServerAuthService')
+			.then(({ joinProject }) => joinProject(projectId))
+			.catch(() => {});
+	}, [projectId]);
+
 	const updateContent = (docId: string, content: string) => {
 		changeDoc((d) => {
 			if (d.documents) {

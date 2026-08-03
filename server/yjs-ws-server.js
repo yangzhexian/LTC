@@ -157,7 +157,7 @@ function handleAuthApi(req, res, pathname, query) {
   }
 
   // ---- project ACL ----
-  if (pathname === '/api/projects' || pathname === '/api/projects/share' || pathname === '/api/projects/unshare' || pathname === '/api/projects/members') {
+  if (pathname === '/api/projects' || pathname === '/api/projects/join' || pathname === '/api/projects/share' || pathname === '/api/projects/unshare' || pathname === '/api/projects/members') {
     const requireUser = (token, cb) => {
       const username = token ? auth.validateSession(token) : null;
       if (!username) {
@@ -196,6 +196,21 @@ function handleAuthApi(req, res, pathname, query) {
           }
           const result = auth.registerProject(b.id, b.name, username);
           json(res, result.ok ? 200 : 403, result);
+        });
+      });
+      return;
+    }
+
+    // Link-based join: open the project link → automatic membership.
+    if (req.method === 'POST' && pathname === '/api/projects/join') {
+      readBody(req, res, (b) => {
+        requireUser(b.token, (username) => {
+          if (!b.id || typeof b.id !== 'string') {
+            json(res, 400, { ok: false, error: 'missing project id' });
+            return;
+          }
+          const result = auth.joinProject(b.id, username);
+          json(res, result.ok ? 200 : 400, result);
         });
       });
       return;

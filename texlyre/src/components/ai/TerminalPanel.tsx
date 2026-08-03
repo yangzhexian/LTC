@@ -527,7 +527,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
                 '\r\n\x1b[31m[Agent] access denied — you are not a member of this project.\x1b[0m\r\n',
               );
               term.write(
-                '\x1b[33m[Agent] Ask the project owner to invite your server account.\x1b[0m\r\n\r\n',
+                '\x1b[33m[Agent] Open this project via its share link while signed in to join automatically.\x1b[0m\r\n\r\n',
               );
             } else {
               term.write(

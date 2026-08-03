@@ -113,11 +113,12 @@ without a session can still open the app in local-only mode ("use locally").
 **2. Project ACL** — projects are registered server-side on creation
 (`POST /api/projects`, owner = creator, stored in `server/.projects.json`).
 Yjs rooms and terminal working directories are only accessible to the owner
-and invited members. **Sharing a project**: click the share button in the
-project → the dialog shows the project link AND the collaborator list — the
-owner invites users by their server username (or removes them); the admin CLI
-can do the same (`share`/`unshare`). Invited users open the link, sign in, and
-collaborate. Unregistered projects are rejected.
+and joined members. **Sharing a project**: just send the project link —
+anyone who opens it while signed in **joins automatically** (link-based
+membership; the project id is an unguessable UUID, so the link is the
+credential). The share dialog shows the current collaborators and lets the
+owner remove people; the admin CLI can do the same (`share`/`unshare`).
+Unregistered projects are claimed by the first person to open them.
 
 Admin CLI (`node server/manage-users.js`):
 ```

@@ -125,6 +125,19 @@ export async function registerProject(
 	}).catch(() => {});
 }
 
+// Link-based join: opening a project link makes the signed-in user a member
+// automatically (idempotent; unknown projects are claimed by the first joiner).
+export async function joinProject(
+	projectId: string,
+): Promise<{ ok: boolean; error?: string }> {
+	const session = getServerSession();
+	if (!session) return { ok: false, error: 'not signed in' };
+	return api('/api/projects/join', {
+		method: 'POST',
+		body: { token: session.token, id: projectId },
+	});
+}
+
 export async function shareProject(
 	projectId: string,
 	username: string,

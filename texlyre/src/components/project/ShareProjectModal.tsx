@@ -1,6 +1,5 @@
 // src/components/project/ShareProjectModal.tsx
 import QRCode from 'qrcode';
-import type React from 'react';
 import { useEffect, useState } from 'react';
 
 import { t } from '@/i18n';
@@ -10,7 +9,6 @@ import Modal from '../common/Modal';
 import {
 	getProjectMembers,
 	getServerSession,
-	shareProject,
 	unshareProject,
 	type ProjectMembers,
 } from '../../services/ServerAuthService';
@@ -32,7 +30,6 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 }) => {
 	const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
 	const [members, setMembers] = useState<ProjectMembers | null>(null);
-	const [inviteUsername, setInviteUsername] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [message, setMessage] = useState('');
 	const [error, setError] = useState('');
@@ -71,23 +68,6 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 		}
 	}, [isOpen, shareUrl, projectId]);
 
-	const handleInvite = async (e: React.FormEvent) => {
-		e.preventDefault();
-		if (busy || !inviteUsername.trim() || !projectId) return;
-		setBusy(true);
-		setMessage('');
-		setError('');
-		const result = await shareProject(projectId, inviteUsername.trim());
-		setBusy(false);
-		if (result.ok) {
-			setMessage(`${inviteUsername.trim()} added`);
-			setInviteUsername('');
-			void loadMembers();
-		} else {
-			setError(result.error || 'Invite failed');
-		}
-	};
-
 	const handleRemove = async (username: string) => {
 		if (busy || !projectId) return;
 		setBusy(true);
@@ -119,7 +99,7 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 					</h4>
 					<p>
 						{t(
-							'Collaborators need this link AND a server account added to the project below.',
+							'Anyone with this link becomes a collaborator automatically after signing in.',
 						)}
 					</p>
 				</div>
@@ -144,7 +124,7 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 
 				{getServerSession() && (
 					<div className='share-members-section'>
-						<label>{t('Collaborators (server accounts)')}</label>
+						<label>{t('Collaborators')}</label>
 
 						{members ? (
 							<ul className='share-members-list'>
@@ -173,26 +153,6 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 							<p className='share-members-loading'>{t('Loading members...')}</p>
 						)}
 
-						{isOwner && (
-							<form className='share-invite-form' onSubmit={handleInvite}>
-								<input
-									className='share-invite-input'
-									type='text'
-									value={inviteUsername}
-									onChange={(e) => setInviteUsername(e.target.value)}
-									placeholder={t('Username to invite')}
-									disabled={busy}
-								/>
-								<button
-									className='share-invite-button'
-									type='submit'
-									disabled={busy || !inviteUsername.trim()}
-								>
-									{t('Invite')}
-								</button>
-							</form>
-						)}
-
 						{message && <p className='share-message success'>{message}</p>}
 						{error && <p className='share-message error'>{error}</p>}
 					</div>
@@ -203,17 +163,17 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 					<ul>
 						<li>
 							{t(
-								'The project owner invites collaborators by their server username',
+								'Send the link to anyone — they sign in and join automatically',
 							)}
 						</li>
 						<li>
 							{t(
-								'Invited users open the link and sign in to start collaborating',
+								'Anyone who opened the link can edit documents and files in real-time',
 							)}
 						</li>
 						<li>
 							{t(
-								'Only the owner and invited members can access the project',
+								'The owner can remove collaborators from the list above',
 							)}
 						</li>
 					</ul>
@@ -224,3 +184,4 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 };
 
 export default ShareProjectModal;
+

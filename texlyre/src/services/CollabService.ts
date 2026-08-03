@@ -283,7 +283,7 @@ class CollabService {
 					const reason = String(event.reason || '');
 					const message = reason.includes('member')
 						? t(
-								'You are not a member of this project. Ask the project owner to invite your server account.',
+								'You are not a member of this project. Open it via its share link while signed in to join automatically.',
 							)
 						: t('Your session is no longer valid. Reload the page to sign in again.');
 					notificationService.showError(message, { duration: 8000 });
