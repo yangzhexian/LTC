@@ -95,8 +95,17 @@ via Yjs; other files via the file channel).
 
 ### Security (Tier 0)
 
-By default the server enforces a **shared token** on both WebSocket ports and
-the `/apply-file` bridge:
+**Web UI entry gate**: the web app's first screen asks for a **site access
+token** before anything else — strangers who know the IP cannot open, register
+or use the app without it. The token is entered when starting the server
+(`bash server/start.sh` prompts for it; it's persisted in
+`server/.site-token`, git-ignored, and verified server-side via
+`GET http://<ip>:8082/api/site-access?token=...` with per-IP throttling after
+10 wrong attempts). Browsers that verify once are remembered (localStorage),
+so refreshes don't re-ask. Leave it empty at startup to disable the gate.
+
+By default the server also enforces a **shared token** on both WebSocket ports
+and the `/apply-file` bridge:
 
 - `server/start.sh` generates `server/.terminal-token` on first run and
   injects it into the web app (`userdata.json`) + server processes

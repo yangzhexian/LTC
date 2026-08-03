@@ -71,6 +71,31 @@ if [ ! -s "$TOKEN_FILE" ]; then
 fi
 TERMINAL_TOKEN="$(cat "$TOKEN_FILE")"
 
+# ---- Site access token (web UI entry gate) ----
+# Entered at startup; the web app's first screen asks visitors for it.
+# Persisted in server/.site-token so restarts can keep the same token.
+SITE_TOKEN_FILE="$PWD/server/.site-token"
+SITE_TOKEN=""
+if [ -f "$SITE_TOKEN_FILE" ]; then
+  SITE_TOKEN="$(cat "$SITE_TOKEN_FILE")"
+fi
+if [ -t 0 ]; then
+  if [ -n "$SITE_TOKEN" ]; then
+    read -p "Site access token (press Enter to keep current, or type a new one): " -s SITE_TOKEN_INPUT
+  else
+    read -p "Site access token for the web UI (empty = no gate, anyone can open the app): " -s SITE_TOKEN_INPUT
+  fi
+  echo
+  if [ -n "$SITE_TOKEN_INPUT" ]; then
+    SITE_TOKEN="$SITE_TOKEN_INPUT"
+    echo "$SITE_TOKEN" > "$SITE_TOKEN_FILE"
+  fi
+fi
+if [ -z "$SITE_TOKEN" ]; then
+  echo "WARNING: no site access token set - the web UI is open to anyone who knows the IP."
+  echo "         Set one by running: bash server/start.sh (or echo '<token>' > server/.site-token)"
+fi
+
 git checkout -- texlyre/userdata.json 2>/dev/null || true
 sed -e "s/__HOST_IP__/$HOST_IP/g" -e "s/__TERMINAL_TOKEN__/$TERMINAL_TOKEN/g" texlyre/userdata.server.json > texlyre/userdata.json
 cp texlyre/userdata.json texlyre/userdata.local.json
@@ -95,7 +120,7 @@ tmux new-session -d -s "$SESSION" -n "texlyre" \
 sleep 1
 
 tmux new-window -t "$SESSION" -n "yjs-ws" \
-  "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/yjs-ws-server.js $PORT_WS"
+  "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN SITE_TOKEN=$SITE_TOKEN node server/yjs-ws-server.js $PORT_WS"
 
 sleep 0.5
 
@@ -114,7 +139,7 @@ for attempt in 1 2; do
     tmux kill-window -t "$SESSION:yjs-ws" 2>/dev/null || true
     tmux kill-window -t "$SESSION:terminal" 2>/dev/null || true
     tmux new-window -t "$SESSION" -n "yjs-ws" \
-      "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/yjs-ws-server.js $PORT_WS"
+      "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN SITE_TOKEN=$SITE_TOKEN node server/yjs-ws-server.js $PORT_WS"
     sleep 0.5
     tmux new-window -t "$SESSION" -n "terminal" \
       "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/terminal-server.js $PORT_TERM"
@@ -133,6 +158,8 @@ cat <<EOF
   Terminal:     ws://$HOST_IP:$PORT_TERM
 
   Open the browser → click Terminal panel → run:  codex
+
+  Site access token (web UI entry gate): ${SITE_TOKEN:+set (server/.site-token)}${SITE_TOKEN:-NOT SET - web UI is open to anyone}
 
   Local agent (each user's own machine, optional):
     # on the user's machine (token = contents of server/.terminal-token):

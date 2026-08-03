@@ -36,6 +36,11 @@ import { openDB } from 'idb';
 
 import './i18n';
 import App from './App';
+import SiteAccessGate, {
+	checkSiteAccess,
+	isSiteAccessVerified,
+	type SiteAccessResult,
+} from './components/SiteAccessGate';
 import { authService } from './services/AuthService';
 import { createNamedLogger } from '@/logging';
 
@@ -264,6 +269,18 @@ function setupDirection() {
 	document.documentElement.setAttribute('dir', direction);
 }
 
+// ---- Site access gate ----
+// The app stays locked behind a token screen until the visitor verifies the
+// site access token (set at server startup). A verified browser is remembered
+// in localStorage so refreshes don't re-ask.
+function renderApp(rootEl: HTMLElement) {
+	ReactDOM.createRoot(rootEl).render(
+		<React.StrictMode>
+			<App />
+		</React.StrictMode>,
+	);
+}
+
 async function startApp() {
 	try {
 		await Promise.all([
@@ -275,9 +292,31 @@ async function startApp() {
 		moduleLog.error('Error during initialization:', error);
 	}
 
-	ReactDOM.createRoot(document.getElementById('root')!).render(
+	const rootEl = document.getElementById('root')!;
+
+	// Already verified in this browser (or the gate is disabled server-side —
+	// checkSiteAccess('') returns granted when no token is configured).
+	if (isSiteAccessVerified()) {
+		renderApp(rootEl);
+		return;
+	}
+
+	const initialStatus: SiteAccessResult = await checkSiteAccess('')
+		.then((r) => r)
+		.catch(() => 'unreachable' as SiteAccessResult);
+
+	if (initialStatus === 'granted') {
+		localStorage.setItem('texlyre-site-access-verified', '1');
+		renderApp(rootEl);
+		return;
+	}
+
+	ReactDOM.createRoot(rootEl).render(
 		<React.StrictMode>
-			<App />
+			<SiteAccessGate
+				initialStatus={initialStatus}
+				onUnlocked={() => renderApp(rootEl)}
+			/>
 		</React.StrictMode>,
 	);
 }

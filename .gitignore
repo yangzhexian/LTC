@@ -25,6 +25,7 @@ texlyre/public/core/busytex/
 server/.yjs-data/
 .yjs-data/
 server/.terminal-token
+server/.site-token
 
 # ---- Local tooling (NOT uploaded to GitHub) ----
 AGENTS.md

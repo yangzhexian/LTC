@@ -21,9 +21,64 @@ const PERSIST_DIR = path.join(__dirname, '..', '.yjs-data');
 // ?token= in the URL; /apply-file must send an x-terminal-token header.
 // Empty string = auth disabled (local/dev only).
 const TERMINAL_TOKEN = process.env.TERMINAL_TOKEN || '';
+// Site access token (web UI entry gate): entered at server startup, the
+// frontend must verify against GET /api/site-access before rendering.
+// Empty string = gate disabled.
+const SITE_TOKEN = process.env.SITE_TOKEN || '';
 
 function tokenValid(candidate) {
   return !TERMINAL_TOKEN || (typeof candidate === 'string' && candidate === TERMINAL_TOKEN);
+}
+
+// ---- Site access gate (web UI entry token) ----
+// Simple per-IP throttle: after N wrong tokens, block the IP for a while.
+const SITE_MAX_FAILURES = 10;
+const SITE_BLOCK_MS = 10 * 60 * 1000;
+const siteFailures = new Map(); // ip → { count, until }
+
+function siteAccessHandler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Type', 'application/json');
+
+  // No token configured on the server → gate open
+  if (!SITE_TOKEN) {
+    res.writeHead(200);
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  const ip = req.socket?.remoteAddress || 'unknown';
+  const entry = siteFailures.get(ip) || { count: 0, until: 0 };
+
+  if (Date.now() < entry.until) {
+    res.writeHead(429);
+    res.end(JSON.stringify({ ok: false, error: 'too many attempts' }));
+    return;
+  }
+
+  let token = '';
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    token = url.searchParams.get('token') || '';
+  } catch {}
+
+  if (token === SITE_TOKEN) {
+    siteFailures.delete(ip);
+    res.writeHead(200);
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  entry.count += 1;
+  if (entry.count >= SITE_MAX_FAILURES) {
+    entry.until = Date.now() + SITE_BLOCK_MS;
+    entry.count = 0;
+    console.log(`  [auth] site access blocked for ${ip} (${SITE_MAX_FAILURES} failed attempts)`);
+  }
+  siteFailures.set(ip, entry);
+  console.log(`  [auth] REJECTED site access from ${ip} (wrong site token, attempt ${entry.count})`);
+  res.writeHead(403);
+  res.end(JSON.stringify({ ok: false }));
 }
 
 // Never crash the process on unhandled errors — log and keep serving
@@ -165,6 +220,13 @@ function applyToLinkedDoc(projectId, relPath, content) {
 
 // ---- HTTP + WebSocket server ----
 const server = http.createServer((req, res) => {
+  // Web UI entry gate: the frontend verifies the site access token here
+  // before rendering the app (GET /api/site-access?token=...)
+  if (req.method === 'GET' && req.url.startsWith('/api/site-access')) {
+    siteAccessHandler(req, res);
+    return;
+  }
+
   // Endpoint for the terminal server to push agent file changes into Yjs docs
   if (req.method === 'POST' && req.url === '/apply-file') {
     let body = '';
