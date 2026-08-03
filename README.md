@@ -93,29 +93,48 @@ latexmk -pdf main.tex
 Agent edits appear in every collaborator's editor in real time (linked documents
 via Yjs; other files via the file channel).
 
-### Security (Tier 0)
+### Security (Tier 1)
 
-**Web UI entry gate**: the web app's first screen asks for a **site access
-token** before anything else — strangers who know the IP cannot open, register
-or use the app without it. The token is entered when starting the server
-(`bash server/start.sh` prompts for it; it's persisted in
-`server/.site-token`, git-ignored, and verified server-side via
+Three layers protect the server:
+
+**1. Web UI entry gate** — the app's first screen asks for a **site access
+token**; strangers who know the IP cannot even open the login page without it.
+Entered at server startup (`bash server/start.sh` prompts for it; persisted in
+`server/.site-token`, git-ignored, verified server-side via
 `GET http://<ip>:8082/api/site-access?token=...` with per-IP throttling after
-10 wrong attempts). Browsers that verify once are remembered (localStorage),
-so refreshes don't re-ask. Leave it empty at startup to disable the gate.
+10 wrong attempts). Browsers that verify once are remembered (localStorage).
+Leave empty to disable.
 
-By default the server also enforces a **shared token** on both WebSocket ports
-and the `/apply-file` bridge:
+**2. Server-side accounts + sessions** — after the gate, users must sign in
+with a **server account** (register requires the admin's **invite code**, set
+at startup in `server/.invite-code`, or accounts can be pre-created with the
+admin CLI). Login issues a random session token (7-day expiry, scrypt-hashed
+passwords, files stored in `server/.users.json` / `server/.sessions.json`,
+git-ignored). All WebSocket connections (Yjs sync + terminal) must present
+`?session=...` — **the session token is never baked into the web app**, so the
+devtools/localStorage tricks from Tier 0 no longer grant server access. Users
+without a session can still open the app in local-only mode ("use locally").
 
-- `server/start.sh` generates `server/.terminal-token` on first run and
-  injects it into the web app (`userdata.json`) + server processes
-- Connections without `?token=` are rejected and logged
-- The terminal working directory is restricted to relative paths under
-  `~/Projects/<projectId>` (absolute paths and `..` traversal are rejected)
-- Scope: protects against port scanners and anyone who knows the server IP
-  but isn't a user of the app. It is **not** a real account system — the token
-  ships with the web app, so legitimate users can extract it. For stronger
-  protection (server-side accounts, per-project ACL, TLS), see the roadmap.
+**3. Project ACL** — projects are registered server-side on creation
+(`POST /api/projects`, owner = creator, stored in `server/.projects.json`).
+Yjs rooms and terminal working directories are only accessible to the owner
+and invited members (`share`/`unshare` endpoints or the admin CLI). Unregistered
+projects are rejected.
+
+Admin CLI (`node server/manage-users.js`):
+```
+create-user <username> [password]    list-users    delete-user <username>
+list-projects                        register-project <projectId> <owner> [name]
+share <projectId> <username>         unshare <projectId> <username>
+```
+
+Notes:
+- `server/.terminal-token` still exists but is **server-internal only**
+  (terminal → yjs `/apply-file` bridge); it is no longer shipped to browsers.
+- Migration: projects created before Tier 1 are unregistered — register them
+  with the CLI (`register-project <id> <owner>`) or re-create them.
+- Remaining roadmap: per-OS-user terminal isolation, TLS reverse proxy,
+  connection rate limits, audit log.
 
 ### SyncTeX
 
@@ -132,7 +151,9 @@ LTC/
 ├── server/
 │   ├── start.sh           # One-command launcher (build + tmux + verify)
 │   ├── yjs-ws-server.js   # Yjs WebSocket server (sync, persistence, /apply-file)
-│   └── terminal-server.js # Browser terminal + bidirectional file sync (node-pty)
+│   ├── terminal-server.js # Browser terminal + bidirectional file sync (node-pty)
+│   ├── auth.js            # Tier 1 accounts/sessions/project ACL (scrypt, files)
+│   └── manage-users.js    # Admin CLI for accounts + project sharing
 ├── texlyre/               # TeXlyre fork (editor, WASM compilers, plugins)
 │   ├── src/
 │   │   ├── components/ai/TerminalPanel.tsx   # Terminal tab (xterm.js)

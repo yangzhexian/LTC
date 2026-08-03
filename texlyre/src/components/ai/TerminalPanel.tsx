@@ -12,7 +12,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { fileStorageEventEmitter, fileStorageService } from '../../services/FileStorageService';
 import { detectFileType, isTemporaryFile } from '../../utils/fileUtils';
 import { threeWayMerge } from '../../utils/textDiffUtils';
-import { getTerminalToken } from '../../utils/terminalToken';
+import { getServerSession } from '../../services/ServerAuthService';
 
 interface TerminalPanelProps {
   className?: string;
@@ -102,8 +102,9 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const effectiveWsUrl = (() => {
     const qs = new URLSearchParams();
     if (cwd) qs.set('cwd', cwd);
-    const token = getTerminalToken();
-    if (token) qs.set('token', token);
+    // Tier 1: the server session token authenticates this connection
+    const session = getServerSession();
+    if (session) qs.set('session', session.token);
     const q = qs.size > 0 ? `?${qs.toString()}` : '';
     const base = wsUrl || `ws://${window.location.hostname}:8084`;
     return `${base}${q}`;
@@ -464,6 +465,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     const connect = () => {
       if (closed) return;
+      // Tier 1: the server terminal requires a signed-in session
+      if (!getServerSession()) {
+        term.write(
+          '\r\n\x1b[31m[Agent] not signed in — the server terminal needs a server account.\x1b[0m\r\n',
+        );
+        term.write(
+          '\x1b[33m[Agent] Reload the page and sign in to use the terminal.\x1b[0m\r\n',
+        );
+        return;
+      }
       ws = new WebSocket(effectiveWsUrl);
       wsRef.current = ws;
 

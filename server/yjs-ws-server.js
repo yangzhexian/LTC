@@ -17,17 +17,29 @@ const awarenessProtocol = require('y-protocols/awareness');
 
 const PORT = parseInt(process.argv[2] || '8082', 10);
 const PERSIST_DIR = path.join(__dirname, '..', '.yjs-data');
-// Shared auth token (Tier 0 protection): WebSocket clients must pass
-// ?token= in the URL; /apply-file must send an x-terminal-token header.
-// Empty string = auth disabled (local/dev only).
+// Shared auth token (Tier 1: server-internal only — terminal-server → us,
+// for the /apply-file bridge). NOT distributed to browsers anymore.
 const TERMINAL_TOKEN = process.env.TERMINAL_TOKEN || '';
 // Site access token (web UI entry gate): entered at server startup, the
 // frontend must verify against GET /api/site-access before rendering.
 // Empty string = gate disabled.
 const SITE_TOKEN = process.env.SITE_TOKEN || '';
+// Tier 1: server-side accounts + sessions + project ACL
+const auth = require('./auth');
+auth.init();
 
 function tokenValid(candidate) {
   return !TERMINAL_TOKEN || (typeof candidate === 'string' && candidate === TERMINAL_TOKEN);
+}
+
+// ---- Room name → projectId (ACL) ----
+// Rooms are "<projectId>-<collection>" with collections: yjs_<docId>,
+// yjs_metadata, chat, file_sync. Rooms without a known suffix (e.g. "default",
+// account-sync rooms) are not project-bound and stay open to authenticated users.
+function parseProjectId(room) {
+  if (typeof room !== 'string' || !room) return null;
+  const m = room.match(/^(.+?)(?:-yjs_|-chat$|-file_sync$)/);
+  return m ? m[1] : null;
 }
 
 // ---- Site access gate (web UI entry token) ----
@@ -79,6 +91,178 @@ function siteAccessHandler(req, res) {
   console.log(`  [auth] REJECTED site access from ${ip} (wrong site token, attempt ${entry.count})`);
   res.writeHead(403);
   res.end(JSON.stringify({ ok: false }));
+}
+
+// ---- Tier 1: account / session / project ACL endpoints ----
+// Same per-IP throttle as the site gate (shared buckets for login attempts).
+const loginFailures = new Map(); // ip → { count, until }
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_BLOCK_MS = 10 * 60 * 1000;
+
+function throttle(ip, failures, maxFailures, blockMs) {
+  const entry = failures.get(ip) || { count: 0, until: 0 };
+  if (Date.now() < entry.until) return 'blocked';
+  if (entry.count >= maxFailures) {
+    entry.until = Date.now() + blockMs;
+    entry.count = 0;
+    failures.set(ip, entry);
+    return 'blocked';
+  }
+  entry.count += 1;
+  failures.set(ip, entry);
+  return 'ok';
+}
+
+function clearThrottle(ip, failures) {
+  failures.delete(ip);
+}
+
+function readBody(req, res, cb) {
+  let body = '';
+  req.on('data', (c) => {
+    body += c;
+    if (body.length > 65536) {
+      res.writeHead(413);
+      res.end(JSON.stringify({ error: 'body too large' }));
+      req.destroy();
+      return;
+    }
+  });
+  req.on('end', () => {
+    try {
+      cb(JSON.parse(body || '{}'));
+    } catch {
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: 'invalid JSON' }));
+    }
+  });
+}
+
+function json(res, status, data) {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+function apiCors(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
+  return false;
+}
+
+function handleAuthApi(req, res, pathname, query) {
+  if (apiCors(req, res)) return;
+  const ip = req.socket?.remoteAddress || 'unknown';
+
+  if (req.method === 'POST' && pathname === '/api/register') {
+    readBody(req, res, (b) => {
+      const { username, password, inviteCode } = b;
+      const result = auth.registerUser(username, password, inviteCode);
+      if (!result.ok) {
+        json(res, 400, result);
+        return;
+      }
+      // Auto-login after registration so the client gets a session token
+      const loginResult = auth.loginUser(username, password);
+      json(res, 200, {
+        ok: true,
+        user: loginResult.user,
+        token: loginResult.token,
+      });
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/api/login') {
+    readBody(req, res, (b) => {
+      if (throttle(ip, loginFailures, LOGIN_MAX_FAILURES, LOGIN_BLOCK_MS) === 'blocked') {
+        console.log(`  [auth] login blocked for ${ip} (too many attempts)`);
+        json(res, 429, { ok: false, error: 'too many attempts' });
+        return;
+      }
+      const result = auth.loginUser(b.username, b.password);
+      if (result.ok) clearThrottle(ip, loginFailures);
+      else console.log(`  [auth] FAILED login attempt from ${ip} (${b.username})`);
+      json(res, result.ok ? 200 : 401, result);
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/api/logout') {
+    readBody(req, res, (b) => {
+      const was = auth.logoutToken(b.token);
+      json(res, 200, { ok: was });
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/api/me') {
+    const username = auth.validateSession(query.get('token'));
+    if (!username) {
+      json(res, 401, { ok: false, error: 'invalid session' });
+      return;
+    }
+    json(res, 200, { ok: true, user: { username } });
+    return;
+  }
+
+  // ---- project ACL ----
+  if (pathname === '/api/projects' || pathname === '/api/projects/share' || pathname === '/api/projects/unshare') {
+    const requireUser = (token, cb) => {
+      const username = token ? auth.validateSession(token) : null;
+      if (!username) {
+        json(res, 401, { ok: false, error: 'invalid session' });
+        return;
+      }
+      cb(username);
+    };
+
+    if (req.method === 'POST' && pathname === '/api/projects') {
+      readBody(req, res, (b) => {
+        requireUser(b.token, (username) => {
+          if (!b.id || typeof b.id !== 'string') {
+            json(res, 400, { ok: false, error: 'missing project id' });
+            return;
+          }
+          const result = auth.registerProject(b.id, b.name, username);
+          json(res, result.ok ? 200 : 403, result);
+        });
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/projects/share') {
+      readBody(req, res, (b) => {
+        requireUser(b.token, (username) => {
+          const result = auth.shareProject(b.id, b.username, username);
+          json(res, result.ok ? 200 : 403, result);
+        });
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/projects/unshare') {
+      readBody(req, res, (b) => {
+        requireUser(b.token, (username) => {
+          const result = auth.unshareProject(b.id, b.username, username);
+          json(res, result.ok ? 200 : 403, result);
+        });
+      });
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/projects') {
+      requireUser(query.get('token'), (username) => {
+        json(res, 200, { ok: true, projects: auth.listProjectsFor(username) });
+      });
+      return;
+    }
+  }
 }
 
 // Never crash the process on unhandled errors — log and keep serving
@@ -220,15 +404,24 @@ function applyToLinkedDoc(projectId, relPath, content) {
 
 // ---- HTTP + WebSocket server ----
 const server = http.createServer((req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const pathname = url.pathname;
+
   // Web UI entry gate: the frontend verifies the site access token here
   // before rendering the app (GET /api/site-access?token=...)
-  if (req.method === 'GET' && req.url.startsWith('/api/site-access')) {
+  if (req.method === 'GET' && pathname === '/api/site-access') {
     siteAccessHandler(req, res);
     return;
   }
 
+  // Tier 1: accounts, sessions, project ACL
+  if (pathname.startsWith('/api/')) {
+    handleAuthApi(req, res, pathname, url.searchParams);
+    return;
+  }
+
   // Endpoint for the terminal server to push agent file changes into Yjs docs
-  if (req.method === 'POST' && req.url === '/apply-file') {
+  if (req.method === 'POST' && pathname === '/apply-file') {
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
@@ -260,20 +453,32 @@ const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
-  // ---- Auth gate: reject connections without the shared token ----
-  if (!tokenValid(url.searchParams.get('token'))) {
-    console.log(`  [auth] REJECTED yjs connection from ${req.socket?.remoteAddress || 'unknown'} (missing/wrong token)`);
-    ws.close(4001, 'invalid token');
+  const docId = url.pathname.replace(/^\//, '') || 'default';
+
+  // ---- Tier 1 auth: browser connections need a valid server session ----
+  // (the shared terminal token is server-internal now, NOT accepted here)
+  const username = auth.validateSession(url.searchParams.get('session'));
+  if (!username) {
+    console.log(`  [auth] REJECTED yjs connection from ${req.socket?.remoteAddress || 'unknown'} (no valid session)`);
+    ws.close(4001, 'not authenticated');
     return;
   }
-  const docId = url.pathname.replace(/^\//, '') || 'default';
+
+  // ---- Project ACL: members only ----
+  const projectId = parseProjectId(docId);
+  if (projectId && !auth.isProjectMember(projectId, username)) {
+    console.log(`  [auth] REJECTED yjs connection from ${username} to project ${projectId} (not a member)`);
+    ws.close(4001, 'not a project member');
+    return;
+  }
+
   const doc = getDoc(docId);
   const awareness = new awarenessProtocol.Awareness(doc);
   const connectors = getConnectors(docId);
   const connector = { ws, awareness };
   connectors.add(connector);
 
-  console.log(`  [join] ${docId}  (total: ${connectors.size})`);
+  console.log(`  [join] ${docId} by ${username}  (total: ${connectors.size})`);
 
   // Broadcast doc updates to all OTHER clients
   const updateHandler = (update, origin) => {

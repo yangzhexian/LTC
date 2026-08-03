@@ -27,9 +27,22 @@ const PORT = parseInt(process.argv[2] || '8084', 10);
 const DEFAULT_CWD = path.resolve(process.argv[3] || '.');
 // Port of the yjs-ws-server (for the /apply-file bridge)
 const YJS_PORT = parseInt(process.env.YJS_PORT || '8082', 10);
-// Shared auth token (Tier 0 protection): clients must pass ?token= in the
-// WebSocket URL. Empty string = auth disabled (local/dev only).
+// Shared auth token (Tier 1): server-internal, used ONLY for the /apply-file
+// bridge to yjs-ws-server (and as WS auth on local agent machines, which have
+// no sessions file). NOT distributed to browsers anymore.
 const TERMINAL_TOKEN = process.env.TERMINAL_TOKEN || '';
+// Tier 1: server-side accounts + project ACL. Auth mode is decided at
+// startup: session mode when start.sh passes AUTH_MODE=session OR a
+// server/.sessions.json exists (server deployment) — browsers must present a
+// valid session token. Otherwise token mode (local agent machines) — the
+// admin's TERMINAL_TOKEN is accepted instead.
+const serverAuth = require('./auth');
+const AUTH_MODE =
+  process.env.AUTH_MODE === 'session' ||
+  fs.existsSync(path.join(process.env.LTC_DATA_DIR || __dirname, '.sessions.json'))
+    ? 'session'
+    : 'token';
+const auth = AUTH_MODE === 'session' ? serverAuth : null;
 
 // Never crash the process on unhandled errors — log and keep serving
 process.on('uncaughtException', (err) => {
@@ -167,18 +180,34 @@ wss.on('connection', (ws, req) => {
     url = new URL(req.url || '/', `http://${req.headers.host}`);
   } catch {}
 
-  // ---- Auth gate: reject connections without the shared token ----
-  const token = url?.searchParams.get('token') || '';
-  if (TERMINAL_TOKEN && token !== TERMINAL_TOKEN) {
-    console.log(`  [auth] REJECTED terminal connection from ${req.socket?.remoteAddress || 'unknown'} (missing/wrong token)`);
-    ws.close(4001, 'invalid token');
+  // ---- Tier 1 auth ----
+  // Mode is decided once at startup:
+  //  * session mode (server deployment): server/.sessions.json exists — the
+  //    browser must present a valid session token (?session=...)
+  //  * token mode (local agent machines): no sessions file — the admin's
+  //    TERMINAL_TOKEN (from local-agent/config.json) is accepted instead
+  const sessionUsername = AUTH_MODE === 'session'
+    ? auth.validateSession(url?.searchParams.get('session') || '')
+    : null;
+  if (AUTH_MODE === 'session' && !sessionUsername) {
+    console.log(`  [auth] REJECTED terminal connection from ${req.socket?.remoteAddress || 'unknown'} (no valid session)`);
+    ws.close(4001, 'not authenticated');
     return;
+  }
+  if (AUTH_MODE === 'token') {
+    const token = url?.searchParams.get('token') || '';
+    if (TERMINAL_TOKEN && token !== TERMINAL_TOKEN) {
+      console.log(`  [auth] REJECTED terminal connection from ${req.socket?.remoteAddress || 'unknown'} (missing/wrong token)`);
+      ws.close(4001, 'invalid token');
+      return;
+    }
   }
 
   // Client can request a working directory via ?cwd= query param.
   // SECURITY: only relative paths under ~/Projects/<projectId> are allowed —
   // absolute paths and ".." traversal are rejected.
   let cwd = DEFAULT_CWD;
+  let cwdProjectId = null;
   try {
     const requested = url?.searchParams.get('cwd');
     if (requested) {
@@ -191,6 +220,13 @@ wss.on('connection', (ws, req) => {
         ws.close(4001, 'invalid cwd');
         return;
       }
+      cwdProjectId = requested === 'Projects' ? null : requested.split('/')[1] || null;
+      // ---- Project ACL: members only (session mode) ----
+      if (AUTH_MODE === 'session' && cwdProjectId && !auth.isProjectMember(cwdProjectId, sessionUsername)) {
+        console.log(`  [auth] REJECTED terminal connection from ${sessionUsername} to project ${cwdProjectId} (not a member)`);
+        ws.close(4001, 'not a project member');
+        return;
+      }
       cwd = path.join(os.homedir(), requested);
       if (!fs.existsSync(cwd)) {
         fs.mkdirSync(cwd, { recursive: true });
@@ -199,7 +235,7 @@ wss.on('connection', (ws, req) => {
     }
   } catch {}
 
-  console.log(`  [terminal] connect (${wss.clients.size} active), cwd: ${cwd}`);
+  console.log(`  [terminal] connect (${wss.clients.size} active), cwd: ${cwd}${AUTH_MODE === 'session' ? `, user: ${sessionUsername}` : ''}`);
   activeConnections.add({ ws, cwd });
   const term = spawnPty(cwd);
   let closed = false;

@@ -79,3 +79,25 @@
 	font-size: 0.8rem;
 	color: #f38ba8;
 }
+
+.site-access-switch {
+	margin-top: 1rem;
+}
+
+.site-access-skip {
+	margin-top: 0.6rem;
+}
+
+.site-access-link {
+	background: none;
+	border: none;
+	color: #89b4fa;
+	font-size: 0.8rem;
+	cursor: pointer;
+	text-decoration: underline;
+	padding: 0;
+}
+
+.site-access-link:hover {
+	color: #a6e3a1;
+}

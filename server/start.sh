@@ -58,9 +58,9 @@ fi
 # Revert tracked copy first so git pull never conflicts.
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
 
-# ---- Shared auth token (Tier 0 security) ----
-# Generated once, persisted in server/.terminal-token, injected into the web
-# app bundle (userdata.json) and passed to both WS servers via env.
+# ---- Internal auth token (Tier 1: server-to-server only) ----
+# Generated once, persisted in server/.terminal-token. Used ONLY by the
+# terminal server → yjs server /apply-file bridge. NOT shipped to browsers.
 TOKEN_FILE="$PWD/server/.terminal-token"
 if [ ! -f "$TOKEN_FILE" ]; then
   head -c 24 /dev/urandom | base64 | tr -d '/+=' > "$TOKEN_FILE" || true
@@ -96,14 +96,38 @@ if [ -z "$SITE_TOKEN" ]; then
   echo "         Set one by running: bash server/start.sh (or echo '<token>' > server/.site-token)"
 fi
 
+# ---- Invite code (Tier 1 registration) ----
+# New accounts require this code (empty = anyone who passed the gate can
+# register). Persisted in server/.invite-code.
+INVITE_CODE_FILE="$PWD/server/.invite-code"
+INVITE_CODE=""
+if [ -f "$INVITE_CODE_FILE" ]; then
+  INVITE_CODE="$(cat "$INVITE_CODE_FILE")"
+fi
+if [ -t 0 ]; then
+  if [ -n "$INVITE_CODE" ]; then
+    read -p "Registration invite code (press Enter to keep current, or type a new one): " -s INVITE_CODE_INPUT
+  else
+    read -p "Registration invite code for new accounts (empty = open registration): " -s INVITE_CODE_INPUT
+  fi
+  echo
+  if [ -n "$INVITE_CODE_INPUT" ]; then
+    INVITE_CODE="$INVITE_CODE_INPUT"
+    echo "$INVITE_CODE" > "$INVITE_CODE_FILE"
+  fi
+fi
+if [ -z "$INVITE_CODE" ]; then
+  echo "WARNING: no invite code set - anyone who knows the site token can register an account."
+fi
+
 git checkout -- texlyre/userdata.json 2>/dev/null || true
-sed -e "s/__HOST_IP__/$HOST_IP/g" -e "s/__TERMINAL_TOKEN__/$TERMINAL_TOKEN/g" texlyre/userdata.server.json > texlyre/userdata.json
+sed -e "s/__HOST_IP__/$HOST_IP/g" texlyre/userdata.server.json > texlyre/userdata.json
 cp texlyre/userdata.json texlyre/userdata.local.json
 echo "Server config: collab websocket = ws://$HOST_IP:$PORT_WS"
-echo "Auth token: stored in server/.terminal-token ($(cat "$TOKEN_FILE" | wc -c) chars)"
+echo "Accounts: invite code ${INVITE_CODE:+set}${INVITE_CODE:-NOT SET - open registration}"
 
 # ---- Build (full pipeline: generate:plugins + tsc + vite build) ----
-BUILD_MARKER="texlyre/dist/.ltc-build-v6"
+BUILD_MARKER="texlyre/dist/.ltc-build-v7"
 if [ ! -d "texlyre/dist" ] || [ ! -f "$BUILD_MARKER" ]; then
   echo "Building TeXlyre (generate plugins + typecheck + bundle)..."
   (cd texlyre && npm run build:local)
@@ -120,12 +144,12 @@ tmux new-session -d -s "$SESSION" -n "texlyre" \
 sleep 1
 
 tmux new-window -t "$SESSION" -n "yjs-ws" \
-  "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN SITE_TOKEN=$SITE_TOKEN node server/yjs-ws-server.js $PORT_WS"
+  "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN SITE_TOKEN=$SITE_TOKEN INVITE_CODE=$INVITE_CODE node server/yjs-ws-server.js $PORT_WS"
 
 sleep 0.5
 
 tmux new-window -t "$SESSION" -n "terminal" \
-  "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/terminal-server.js $PORT_TERM"
+  "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN AUTH_MODE=session node server/terminal-server.js $PORT_TERM"
 
 # ---- Keep crashed windows visible + self-heal ----
 tmux set-option -t "$SESSION" remain-on-exit on
@@ -139,10 +163,10 @@ for attempt in 1 2; do
     tmux kill-window -t "$SESSION:yjs-ws" 2>/dev/null || true
     tmux kill-window -t "$SESSION:terminal" 2>/dev/null || true
     tmux new-window -t "$SESSION" -n "yjs-ws" \
-      "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN SITE_TOKEN=$SITE_TOKEN node server/yjs-ws-server.js $PORT_WS"
+      "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN SITE_TOKEN=$SITE_TOKEN INVITE_CODE=$INVITE_CODE node server/yjs-ws-server.js $PORT_WS"
     sleep 0.5
     tmux new-window -t "$SESSION" -n "terminal" \
-      "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/terminal-server.js $PORT_TERM"
+      "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN AUTH_MODE=session node server/terminal-server.js $PORT_TERM"
     sleep 2
   fi
 done
@@ -160,6 +184,8 @@ cat <<EOF
   Open the browser → click Terminal panel → run:  codex
 
   Site access token (web UI entry gate): ${SITE_TOKEN:+set (server/.site-token)}${SITE_TOKEN:-NOT SET - web UI is open to anyone}
+  Accounts: invite code ${INVITE_CODE:+set (server/.invite-code)}${INVITE_CODE:-NOT SET - open registration}
+  Manage accounts: node server/manage-users.js (create-user / list-users / share ...)
 
   Local agent (each user's own machine, optional):
     # on the user's machine (token = contents of server/.terminal-token):

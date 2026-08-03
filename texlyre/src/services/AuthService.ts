@@ -280,6 +280,14 @@ class AuthService {
 		await this.db?.put(this.USER_STORE, upgradedUser);
 		await this.db?.delete(this.USER_STORE, oldGuestId);
 
+		// Tier 1: register the upgraded user's projects with the server
+		// (project ACL) now that they have a server session.
+		const { registerProject } = await import('./ServerAuthService');
+		const upgradedProjects = await this.getProjectsByUser(newUserId);
+		for (const project of upgradedProjects) {
+			registerProject(project.id, project.name).catch(() => {});
+		}
+
 		this.currentUser = upgradedUser;
 		localStorage.setItem('texlyre-current-user', newUserId);
 
@@ -651,6 +659,11 @@ class AuthService {
 		};
 
 		await this.db?.put(this.PROJECT_STORE, newProject);
+
+		// Tier 1: register the project with the server so the owner becomes a
+		// member (project ACL). No-op when not signed in.
+		const { registerProject } = await import('./ServerAuthService');
+		registerProject(projectId, project.name).catch(() => {});
 
 		if (shouldAutoSync()) {
 			fileSystemBackupService.synchronize(newProject.id).catch(console.error);

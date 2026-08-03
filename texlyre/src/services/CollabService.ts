@@ -14,7 +14,7 @@ import type {
 } from '../types/collab';
 import type { YjsDocUrl } from '../types/yjs';
 import { parseUrlFragments } from '../utils/urlUtils';
-import { getTerminalToken } from '../utils/terminalToken';
+import { getServerSession } from './ServerAuthService';
 import { offlineService } from './OfflineService';
 import { createNamedLogger } from '@/logging';
 
@@ -119,7 +119,9 @@ class CollabService {
 			`Creating new connection for: ${containerId} (offline: ${this.isOfflineMode()})`,
 		);
 
-		if (this.forceLocalConnections || this.isOfflineMode()) {
+		// Tier 1: without a server session the client has no server access —
+		// fall back to the local (IndexedDB-only) connection.
+		if (this.forceLocalConnections || this.isOfflineMode() || !getServerSession()) {
 			return this.createOfflineConnection(docId, collectionName, containerId);
 		}
 		return this.createOnlineConnection(
@@ -251,13 +253,13 @@ class CollabService {
 	): CollabProvider {
 		const serverUrl = options?.websocketServer || 'ws://localhost:1234';
 
-		// Attach the shared auth token (Tier 0) to every Yjs WebSocket
-		// connection so the server can reject unauthorized clients.
+		// Tier 1: the server session token authenticates this connection
+		// (?session=...) — it is never baked into the bundle.
 		const params: Record<string, string> = {
 			...(options?.websocketParams || {}),
 		};
-		const token = getTerminalToken();
-		if (token && !params.token) params.token = token;
+		const session = getServerSession();
+		if (session && !params.session) params.session = session.token;
 
 		return collabWebsocket.getProvider(roomName, doc, {
 			serverUrl,

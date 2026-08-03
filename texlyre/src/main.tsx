@@ -41,6 +41,8 @@ import SiteAccessGate, {
 	isSiteAccessVerified,
 	type SiteAccessResult,
 } from './components/SiteAccessGate';
+import ServerAuthGate from './components/ServerAuthGate';
+import { me } from './services/ServerAuthService';
 import { authService } from './services/AuthService';
 import { createNamedLogger } from '@/logging';
 
@@ -269,10 +271,10 @@ function setupDirection() {
 	document.documentElement.setAttribute('dir', direction);
 }
 
-// ---- Site access gate ----
-// The app stays locked behind a token screen until the visitor verifies the
-// site access token (set at server startup). A verified browser is remembered
-// in localStorage so refreshes don't re-ask.
+// ---- Site access gate + server login ----
+// The app stays locked until the visitor passes the site access token screen
+// (if configured) and has a valid server session (Tier 1 accounts). A
+// verified browser is remembered in localStorage so refreshes don't re-ask.
 function renderApp(rootEl: HTMLElement) {
 	ReactDOM.createRoot(rootEl).render(
 		<React.StrictMode>
@@ -297,7 +299,7 @@ async function startApp() {
 	// Already verified in this browser (or the gate is disabled server-side —
 	// checkSiteAccess('') returns granted when no token is configured).
 	if (isSiteAccessVerified()) {
-		renderApp(rootEl);
+		await startAppWithSession(rootEl);
 		return;
 	}
 
@@ -307,7 +309,7 @@ async function startApp() {
 
 	if (initialStatus === 'granted') {
 		localStorage.setItem('texlyre-site-access-verified', '1');
-		renderApp(rootEl);
+		await startAppWithSession(rootEl);
 		return;
 	}
 
@@ -315,7 +317,27 @@ async function startApp() {
 		<React.StrictMode>
 			<SiteAccessGate
 				initialStatus={initialStatus}
-				onUnlocked={() => renderApp(rootEl)}
+				onUnlocked={() => {
+					localStorage.setItem('texlyre-site-access-verified', '1');
+					void startAppWithSession(rootEl);
+				}}
+			/>
+		</React.StrictMode>,
+	);
+}
+
+// Tier 1: require a valid server session (or let the user continue locally).
+async function startAppWithSession(rootEl: HTMLElement) {
+	const session = await me().catch(() => null);
+	if (session) {
+		renderApp(rootEl);
+		return;
+	}
+	ReactDOM.createRoot(rootEl).render(
+		<React.StrictMode>
+			<ServerAuthGate
+				onAuthed={() => renderApp(rootEl)}
+				onSkip={() => renderApp(rootEl)}
 			/>
 		</React.StrictMode>,
 	);
