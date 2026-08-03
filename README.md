@@ -93,6 +93,37 @@ latexmk -pdf main.tex
 Agent edits appear in every collaborator's editor in real time (linked documents
 via Yjs; other files via the file channel).
 
+**Local agent (optional, one-time setup)** — run the agent on your own machine
+instead of the server. Each user sets it up **once** with a double-click; after
+that it auto-starts at login and the **Local Agent** tab in the output panel
+just works (connects to `ws://127.0.0.1:8085`; if it isn't running, the tab
+shows a setup hint and retries when you click it again). The regular
+**Terminal** tab keeps using the server terminal.
+
+Windows (no admin, no Node.js needed — portable Node is downloaded):
+```cmd
+REM on your machine, double-click instead:
+server\local-agent\setup-windows.bat
+REM it asks once for: server IP + agent token (cat ~/LTC/server/.terminal-token
+REM on the server), then installs deps, registers auto-start, starts the server
+```
+
+Linux:
+```bash
+bash server/local-agent/setup-linux.sh   # registers a systemd user service
+```
+
+Manual start (if you prefer not to use the installer):
+```bash
+cd ~/LTC && npm install --prefix texlyre  # once
+TERMINAL_TOKEN=<token> YJS_URL=http://<server-ip>:8082 \
+  NODE_PATH=$PWD/texlyre/node_modules node server/terminal-server.js 8085
+```
+
+Your files live in `~/Projects/<projectId>/` on your machine (auto-created on
+first connect); the agent edits there reach collaborators in real time via the
+server's Yjs bridge (`yjsUrl` in `server/local-agent/config.json`).
+
 ### Security (Tier 0)
 
 By default the server enforces a **shared token** on both WebSocket ports and

@@ -1,0 +1,10 @@
+{
+  "name": "ltc-local-agent",
+  "private": true,
+  "description": "Local agent terminal dependencies (ws + node-pty) for LTC users",
+  "version": "1.0.0",
+  "dependencies": {
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0"
+  }
+}

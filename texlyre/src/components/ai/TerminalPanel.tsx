@@ -17,6 +17,13 @@ import { getTerminalToken } from '../../utils/terminalToken';
 interface TerminalPanelProps {
   className?: string;
   wsUrl?: string;
+  /** Forced-URL panel dedicated to the user's LOCAL agent terminal
+   *  (ws://127.0.0.1:8085): no server fallback, no endless reconnect when
+   *  the local terminal-server isn't running. */
+  isLocalAgent?: boolean;
+  /** Whether this panel's tab is currently visible — used to re-probe a
+   *  local agent connection after it gave up (user started the server). */
+  active?: boolean;
   projectId?: string | null;
   documents?: Array<{ id: string; name: string }>;
   docUrl?: string;
@@ -73,6 +80,8 @@ const LIGHT_THEME = {
 const TerminalPanel: React.FC<TerminalPanelProps> = ({
   className = '',
   wsUrl,
+  isLocalAgent = false,
+  active = false,
   projectId,
   documents,
   docUrl,
@@ -99,13 +108,30 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   // Working directory: ~/Projects/<projectId> — resolved server-side against $HOME
   const cwd = projectId ? `Projects/${projectId}` : '';
 
+  // Local agent terminal first (ws://127.0.0.1:8085 — user runs
+  // `node server/terminal-server.js 8085` on their own machine so codex works
+  // on their real files); falls back to the server terminal
+  // (ws://<hostname>:8084) if no local terminal-server is running.
+  const [localUnavailable, setLocalUnavailable] = useState(false);
+  const localUnavailableRef = useRef(false);
+  const usingLocal = isLocalAgent || (!wsUrl && !localUnavailable);
+
+  // Local agent panel: give up (no endless reconnect) if the local
+  // terminal-server never starts; re-probe when its tab becomes active.
+  const gaveUpRef = useRef(false);
+  const everOpenedRef = useRef(false);
+  const [retryToken, setRetryToken] = useState(0);
+
   const effectiveWsUrl = (() => {
     const qs = new URLSearchParams();
     if (cwd) qs.set('cwd', cwd);
     const token = getTerminalToken();
     if (token) qs.set('token', token);
     const q = qs.size > 0 ? `?${qs.toString()}` : '';
-    const base = wsUrl || `ws://${window.location.hostname}:8084`;
+    if (wsUrl) return `${wsUrl}${q}`;
+    const base = localUnavailable
+      ? `ws://${window.location.hostname}:8084`
+      : 'ws://127.0.0.1:8085';
     return `${base}${q}`;
   })();
 
@@ -469,7 +495,10 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       ws.onopen = async () => {
         setIsConnected(true);
-        term.write('\x1b[36m[Agent] connected to project directory\x1b[0m\r\n');
+        everOpenedRef.current = true;
+        term.write(
+          `\x1b[36m[Agent] connected${isLocalAgent || (!wsUrl && !localUnavailableRef.current) ? ' to LOCAL terminal (127.0.0.1:8085)' : ' to server terminal'}\x1b[0m\r\n`,
+        );
         if (cwd) {
           term.write(`\x1b[90mWorking in: ~/${cwd}\x1b[0m\r\n`);
         }
@@ -507,6 +536,25 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       ws.onclose = () => {
         setIsConnected(false);
         if (!closed) {
+          // Local agent panel that never connected: the local terminal-server
+          // isn't running — give up quietly instead of reconnecting forever.
+          if (isLocalAgent && !everOpenedRef.current) {
+            gaveUpRef.current = true;
+            term.write('\r\n\x1b[33m[Agent] local terminal not running.\x1b[0m\r\n');
+            term.write(
+              '\x1b[33m[Agent] One-time setup on this machine (Windows): double-click\x1b[0m\r\n',
+            );
+            term.write(
+              '\x1b[33m[Agent]   server/local-agent/setup-windows.bat\x1b[0m\r\n',
+            );
+            term.write(
+              '\x1b[33m[Agent] (Linux: bash server/local-agent/setup-linux.sh)\x1b[0m\r\n',
+            );
+            term.write(
+              '\x1b[33m[Agent] Then click the Local Agent tab again to connect.\x1b[0m\r\n\r\n',
+            );
+            return;
+          }
           term.write('\r\n\x1b[31mDisconnected — reconnecting...\x1b[0m\r\n');
           reconnectTimer = setTimeout(connect, 2000);
         }
@@ -514,6 +562,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
       ws.onerror = () => {
         term.write('\r\n\x1b[31mConnection error\x1b[0m\r\n');
+        // No local terminal-server running → fall back to the server terminal.
+        // The state flip re-initializes the effect with the server URL.
+        if (!wsUrl && !localUnavailableRef.current) {
+          localUnavailableRef.current = true;
+          setLocalUnavailable(true);
+        } else if (isLocalAgent && !everOpenedRef.current) {
+          gaveUpRef.current = true;
+        }
       };
 
       term.onData((data) => {
@@ -570,7 +626,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
       initialized.current = false;
       syncStarted.current = false;
     };
-  }, [effectiveWsUrl, cwd, projectId]);
+  }, [effectiveWsUrl, cwd, projectId, retryToken]);
+
+  // Re-probe the local agent terminal when its tab becomes visible after a
+  // give-up (e.g. the user just started the local terminal-server).
+  useEffect(() => {
+    if (isLocalAgent && active && gaveUpRef.current) {
+      gaveUpRef.current = false;
+      setRetryToken((x) => x + 1);
+    }
+  }, [isLocalAgent, active]);
 
   // Apply theme changes (light/dark only)
   useEffect(() => {
@@ -612,6 +677,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         </span>
         <span className='terminal-cwd'>
           {cwd ? `~/${cwd}` : ''}
+          {usingLocal ? ' · local agent' : ''}
           {syncedFiles > 0 ? ` · ${syncedFiles} files` : ''}
         </span>
       </div>

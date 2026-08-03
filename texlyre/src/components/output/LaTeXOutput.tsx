@@ -88,6 +88,7 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 	const [visualizerCollapsed, setVisualizerCollapsed] = useState(false);
 	const [autoMainFile, setAutoMainFile] = useState<string | undefined>();
 	const [showTerminal, setShowTerminal] = useState(false);
+	const [showLocalTerminal, setShowLocalTerminal] = useState(false);
 
 	const settingFormat =
 		(getSetting('latex-default-format')?.value as LaTeXOutputFormat) ?? 'pdf';
@@ -455,73 +456,90 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 			style={{ position: 'relative' }}
 		>
 			<div className='output-header'>
-				<div className='view-tabs'>
-					<button
-						className={`tab-button ${showTerminal ? '' : currentView === 'log' ? 'active' : ''}`}
-						onClick={() => {
-							setShowTerminal(false);
-							if (currentView !== 'log') toggleOutputView();
-						}}
-					>
-						<div
-							className='status-dot'
-							style={{ backgroundColor: indicatorColor }}
-						/>
-						{t('Log')}
-					</button>
+			<div className='view-tabs'>
+				<button
+					className={`tab-button ${showTerminal || showLocalTerminal ? '' : currentView === 'log' ? 'active' : ''}`}
+					onClick={() => {
+						setShowTerminal(false);
+						setShowLocalTerminal(false);
+						if (currentView !== 'log') toggleOutputView();
+					}}
+				>
+					<div
+						className='status-dot'
+						style={{ backgroundColor: indicatorColor }}
+					/>
+					{t('Log')}
+				</button>
 
-					{currentView === 'output' && (
-						<>
-							<button
-								className={`tab-button ${
-									!showTerminal && currentView === 'output' && effectiveFormat === 'pdf'
-										? 'active'
-										: ''
-								}`}
-								onClick={() => {
-									setShowTerminal(false);
-									handleTabSwitch('pdf');
-								}}
-							>
-								{t('PDF')}
-							</button>
-
-							<button
-								className={`tab-button ${
-									!showTerminal && currentView === 'output' && effectiveFormat === 'canvas-pdf'
-										? 'active'
-										: ''
-								}`}
-								onClick={() => {
-									setShowTerminal(false);
-									handleTabSwitch('canvas-pdf');
-								}}
-							>
-								{t('Canvas (PDF)')}
-							</button>
-						</>
-					)}
-
-					{currentView === 'log' && (
+				{currentView === 'output' && (
+					<>
 						<button
-							className={`tab-button ${!showTerminal ? 'active' : ''}`}
+							className={`tab-button ${
+								!showTerminal && !showLocalTerminal && currentView === 'output' && effectiveFormat === 'pdf'
+									? 'active'
+									: ''
+							}`}
 							onClick={() => {
 								setShowTerminal(false);
-								toggleOutputView();
+								setShowLocalTerminal(false);
+								handleTabSwitch('pdf');
 							}}
-							disabled={!hasAnyOutput}
 						>
-							{t('Output')}
+							{t('PDF')}
 						</button>
-					)}
 
+						<button
+							className={`tab-button ${
+								!showTerminal && !showLocalTerminal && currentView === 'output' && effectiveFormat === 'canvas-pdf'
+									? 'active'
+									: ''
+							}`}
+							onClick={() => {
+								setShowTerminal(false);
+								setShowLocalTerminal(false);
+								handleTabSwitch('canvas-pdf');
+							}}
+						>
+							{t('Canvas (PDF)')}
+						</button>
+					</>
+				)}
+
+				{currentView === 'log' && (
 					<button
-						className={`tab-button ${showTerminal ? 'active' : ''}`}
-						onClick={() => setShowTerminal(!showTerminal)}
+						className={`tab-button ${!showTerminal && !showLocalTerminal ? 'active' : ''}`}
+						onClick={() => {
+							setShowTerminal(false);
+							setShowLocalTerminal(false);
+							toggleOutputView();
+						}}
+						disabled={!hasAnyOutput}
 					>
-						{t('Terminal')}
+						{t('Output')}
 					</button>
-				</div>
+				)}
+
+				<button
+					className={`tab-button ${showTerminal ? 'active' : ''}`}
+					onClick={() => {
+						setShowTerminal(!showTerminal);
+						setShowLocalTerminal(false);
+					}}
+				>
+					{t('Terminal')}
+				</button>
+
+				<button
+					className={`tab-button ${showLocalTerminal ? 'active' : ''}`}
+					onClick={() => {
+						setShowLocalTerminal(!showLocalTerminal);
+						setShowTerminal(false);
+					}}
+				>
+					{t('Local Agent')}
+				</button>
+			</div>
 
 				<LaTeXCompileButton
 					dropdownKey='latex-output-dropdown'
@@ -551,7 +569,29 @@ const LaTeXOutput: React.FC<LaTeXOutputProps> = ({
 				/>
 			</div>
 
+			{/* Local agent terminal: user's own machine (ws://127.0.0.1:8085).
+			    Kept mounted while hidden so the local agent process keeps
+			    running when switching tabs. */}
+			<div
+				className='terminal-tab-wrapper'
+				style={{
+					display: showLocalTerminal ? 'contents' : 'none',
+					height: '100%',
+				}}
+			>
+				<TerminalPanel
+					className='output-terminal'
+					wsUrl='ws://127.0.0.1:8085'
+					isLocalAgent
+					active={showLocalTerminal}
+					projectId={projectId}
+					documents={documents}
+					docUrl={docUrl}
+				/>
+			</div>
+
 			{!showTerminal &&
+				!showLocalTerminal &&
 				(!compileLog && !hasAnyOutput ? (
 				<div className='empty-state'>
 					<p>

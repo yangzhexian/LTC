@@ -1,0 +1,5 @@
+{
+  "port": 8085,
+  "yjsUrl": "http://192.168.1.100:8082",
+  "token": "REPLACE_WITH_TOKEN_FROM_SERVER_TERMINAL_TOKEN_FILE"
+}

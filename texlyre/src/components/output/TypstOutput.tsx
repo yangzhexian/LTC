@@ -72,6 +72,7 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 	const [visualizerHeight, setVisualizerHeight] = useState(300);
 	const [visualizerCollapsed, setVisualizerCollapsed] = useState(false);
 	const [showTerminal, setShowTerminal] = useState(false);
+	const [showLocalTerminal, setShowLocalTerminal] = useState(false);
 	const [autoMainFile, setAutoMainFile] = useState<string | undefined>();
 
 	const settingFormat =
@@ -440,9 +441,10 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 			<div className='output-header'>
 				<div className='view-tabs'>
 					<button
-						className={`tab-button ${showTerminal ? '' : currentView === 'log' ? 'active' : ''}`}
+						className={`tab-button ${showTerminal || showLocalTerminal ? '' : currentView === 'log' ? 'active' : ''}`}
 						onClick={() => {
 							setShowTerminal(false);
+							setShowLocalTerminal(false);
 							if (currentView !== 'log') toggleOutputView();
 						}}
 					>
@@ -455,9 +457,10 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 					{currentView === 'output' && (
 						<>
 							<button
-								className={`tab-button ${!showTerminal && currentView === 'output' && effectiveFormat === 'pdf' ? 'active' : ''}`}
+								className={`tab-button ${!showTerminal && !showLocalTerminal && currentView === 'output' && effectiveFormat === 'pdf' ? 'active' : ''}`}
 								onClick={() => {
 									setShowTerminal(false);
+									setShowLocalTerminal(false);
 									handleTabSwitch('pdf');
 								}}
 							>
@@ -465,18 +468,20 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 							</button>
 
 							<button
-								className={`tab-button ${!showTerminal && currentView === 'output' && effectiveFormat === 'canvas-pdf' ? 'active' : ''}`}
+								className={`tab-button ${!showTerminal && !showLocalTerminal && currentView === 'output' && effectiveFormat === 'canvas-pdf' ? 'active' : ''}`}
 								onClick={() => {
 									setShowTerminal(false);
+									setShowLocalTerminal(false);
 									handleTabSwitch('canvas-pdf');
 								}}
 							>
 								{t('Canvas (PDF)')}
 							</button>
 							<button
-								className={`tab-button ${!showTerminal && currentView === 'output' && effectiveFormat === 'canvas' ? 'active' : ''}`}
+								className={`tab-button ${!showTerminal && !showLocalTerminal && currentView === 'output' && effectiveFormat === 'canvas' ? 'active' : ''}`}
 								onClick={() => {
 									setShowTerminal(false);
+									setShowLocalTerminal(false);
 									handleTabSwitch('canvas');
 								}}
 							>
@@ -486,9 +491,10 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 					)}
 					{currentView === 'log' && (
 						<button
-							className={`tab-button ${!showTerminal ? 'active' : ''}`}
+							className={`tab-button ${!showTerminal && !showLocalTerminal ? 'active' : ''}`}
 							onClick={() => {
 								setShowTerminal(false);
+								setShowLocalTerminal(false);
 								toggleOutputView();
 							}}
 							disabled={!hasAnyOutput}
@@ -498,9 +504,21 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 					)}
 					<button
 						className={`tab-button ${showTerminal ? 'active' : ''}`}
-						onClick={() => setShowTerminal(!showTerminal)}
+						onClick={() => {
+							setShowTerminal(!showTerminal);
+							setShowLocalTerminal(false);
+						}}
 					>
 						{t('Terminal')}
+					</button>
+					<button
+						className={`tab-button ${showLocalTerminal ? 'active' : ''}`}
+						onClick={() => {
+							setShowLocalTerminal(!showLocalTerminal);
+							setShowTerminal(false);
+						}}
+					>
+						{t('Local Agent')}
 					</button>
 				</div>
 				<TypstCompileButton
@@ -532,7 +550,29 @@ const TypstOutput: React.FC<TypstOutputProps> = ({
 				/>
 			</div>
 
+			{/* Local agent terminal: user's own machine (ws://127.0.0.1:8085).
+			    Kept mounted while hidden so the local agent process keeps
+			    running when switching tabs. */}
+			<div
+				className='terminal-tab-wrapper'
+				style={{
+					display: showLocalTerminal ? 'contents' : 'none',
+					height: '100%',
+				}}
+			>
+				<TerminalPanel
+					className='output-terminal'
+					wsUrl='ws://127.0.0.1:8085'
+					isLocalAgent
+					active={showLocalTerminal}
+					projectId={projectId}
+					documents={documents}
+					docUrl={docUrl}
+				/>
+			</div>
+
 			{!showTerminal &&
+				!showLocalTerminal &&
 				(!compileLog && !hasAnyOutput ? (
 				<div className='empty-state'>
 					<p>

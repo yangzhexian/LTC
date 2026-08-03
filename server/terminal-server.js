@@ -14,6 +14,11 @@
 // Usage:  cd texlyre && node ../server/terminal-server.js [port]
 // Auth:   if TERMINAL_TOKEN env is set, clients must connect with ?token=...
 //         cwd is restricted to relative paths under ~/Projects/<projectId>.
+// Config: server/local-agent/config.json ({port, yjsUrl, token}) is read
+//         automatically — this is how the one-time installer works, so users
+//         don't need to deal with environment variables.
+// Local agent machine (manual): TERMINAL_TOKEN=<t> YJS_URL=http://<server-ip>:8082 \
+//                       node ../server/terminal-server.js 8085
 
 const { spawn } = require('node:child_process');
 const http = require('node:http');
@@ -23,13 +28,26 @@ const os = require('node:os');
 
 const { WebSocketServer } = require('ws');
 
-const PORT = parseInt(process.argv[2] || '8084', 10);
+// Optional local-agent config (server/local-agent/config.json) — written by
+// setup-windows.bat / setup-linux.sh. Env vars take precedence.
+let agentConfig = {};
+try {
+  agentConfig = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'local-agent', 'config.json'), 'utf8'),
+  );
+} catch {}
+
+const PORT = parseInt(process.argv[2] || agentConfig.port || '8084', 10);
 const DEFAULT_CWD = path.resolve(process.argv[3] || '.');
 // Port of the yjs-ws-server (for the /apply-file bridge)
 const YJS_PORT = parseInt(process.env.YJS_PORT || '8082', 10);
+// Base URL of the yjs-ws-server. On a user's LOCAL agent machine, point this
+// at the REMOTE server so agent edits still reach the shared Yjs documents:
+//   YJS_URL=http://<server-ip>:8082 node server/terminal-server.js 8085
+const YJS_URL = process.env.YJS_URL || agentConfig.yjsUrl || `http://localhost:${YJS_PORT}`;
 // Shared auth token (Tier 0 protection): clients must pass ?token= in the
 // WebSocket URL. Empty string = auth disabled (local/dev only).
-const TERMINAL_TOKEN = process.env.TERMINAL_TOKEN || '';
+const TERMINAL_TOKEN = process.env.TERMINAL_TOKEN || agentConfig.token || '';
 
 // Never crash the process on unhandled errors — log and keep serving
 process.on('uncaughtException', (err) => {
@@ -40,11 +58,17 @@ process.on('unhandledRejection', (err) => {
 });
 
 // ---- Try node-pty, fall back to raw spawn ----
+// Windows has no SHELL env by default — fall back to cmd.exe so the local
+// agent terminal works out of the box (Git Bash users can set SHELL=bash).
+const defaultShell = () =>
+  process.env.SHELL ||
+  (process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : 'bash');
+
 let spawnPty;
 try {
   const pty = require('node-pty');
   spawnPty = (cwd) => {
-    const shell = process.env.SHELL || 'bash';
+    const shell = defaultShell();
     const term = pty.spawn(shell, [], {
       name: 'xterm-256color',
       cols: 80,
@@ -58,7 +82,7 @@ try {
 } catch {
   console.log('  node-pty not available; using raw child process');
   spawnPty = (cwd) => {
-    const shell = process.env.SHELL || 'bash';
+    const shell = defaultShell();
     const child = spawn(shell, [], {
       cwd,
       env: { ...process.env, TERM: 'xterm-256color' },
@@ -230,7 +254,7 @@ wss.on('connection', (ws, req) => {
       if (TEXT_EXTENSIONS.has(ext)) {
         const projectId = path.basename(cwd);
         const content = buf.toString('utf8');
-        fetch(`http://localhost:${YJS_PORT}/apply-file`, {
+        fetch(`${YJS_URL}/apply-file`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
