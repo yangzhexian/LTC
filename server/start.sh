@@ -57,13 +57,28 @@ fi
 # Desktop loads userdata.json (not userdata.local.json) — overwrite both.
 # Revert tracked copy first so git pull never conflicts.
 HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+
+# ---- Shared auth token (Tier 0 security) ----
+# Generated once, persisted in server/.terminal-token, injected into the web
+# app bundle (userdata.json) and passed to both WS servers via env.
+TOKEN_FILE="$PWD/server/.terminal-token"
+if [ ! -f "$TOKEN_FILE" ]; then
+  head -c 24 /dev/urandom | base64 | tr -d '/+=' > "$TOKEN_FILE" || true
+fi
+if [ ! -s "$TOKEN_FILE" ]; then
+  echo "WARNING: could not generate random token, using fallback (change server/.terminal-token manually!)"
+  date +%s | sha256sum | head -c 32 > "$TOKEN_FILE"
+fi
+TERMINAL_TOKEN="$(cat "$TOKEN_FILE")"
+
 git checkout -- texlyre/userdata.json 2>/dev/null || true
-sed "s/__HOST_IP__/$HOST_IP/g" texlyre/userdata.server.json > texlyre/userdata.json
+sed -e "s/__HOST_IP__/$HOST_IP/g" -e "s/__TERMINAL_TOKEN__/$TERMINAL_TOKEN/g" texlyre/userdata.server.json > texlyre/userdata.json
 cp texlyre/userdata.json texlyre/userdata.local.json
 echo "Server config: collab websocket = ws://$HOST_IP:$PORT_WS"
+echo "Auth token: stored in server/.terminal-token ($(cat "$TOKEN_FILE" | wc -c) chars)"
 
 # ---- Build (full pipeline: generate:plugins + tsc + vite build) ----
-BUILD_MARKER="texlyre/dist/.ltc-build-v5"
+BUILD_MARKER="texlyre/dist/.ltc-build-v6"
 if [ ! -d "texlyre/dist" ] || [ ! -f "$BUILD_MARKER" ]; then
   echo "Building TeXlyre (generate plugins + typecheck + bundle)..."
   (cd texlyre && npm run build:local)
@@ -80,12 +95,12 @@ tmux new-session -d -s "$SESSION" -n "texlyre" \
 sleep 1
 
 tmux new-window -t "$SESSION" -n "yjs-ws" \
-  "NODE_PATH=$PWD/texlyre/node_modules node server/yjs-ws-server.js $PORT_WS"
+  "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/yjs-ws-server.js $PORT_WS"
 
 sleep 0.5
 
 tmux new-window -t "$SESSION" -n "terminal" \
-  "NODE_PATH=$PWD/texlyre/node_modules node server/terminal-server.js $PORT_TERM"
+  "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/terminal-server.js $PORT_TERM"
 
 # ---- Keep crashed windows visible + self-heal ----
 tmux set-option -t "$SESSION" remain-on-exit on
@@ -99,10 +114,10 @@ for attempt in 1 2; do
     tmux kill-window -t "$SESSION:yjs-ws" 2>/dev/null || true
     tmux kill-window -t "$SESSION:terminal" 2>/dev/null || true
     tmux new-window -t "$SESSION" -n "yjs-ws" \
-      "NODE_PATH=$PWD/texlyre/node_modules node server/yjs-ws-server.js $PORT_WS"
+      "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/yjs-ws-server.js $PORT_WS"
     sleep 0.5
     tmux new-window -t "$SESSION" -n "terminal" \
-      "NODE_PATH=$PWD/texlyre/node_modules node server/terminal-server.js $PORT_TERM"
+      "NODE_PATH=$PWD/texlyre/node_modules TERMINAL_TOKEN=$TERMINAL_TOKEN node server/terminal-server.js $PORT_TERM"
     sleep 2
   fi
 done
@@ -118,6 +133,12 @@ cat <<EOF
   Terminal:     ws://$HOST_IP:$PORT_TERM
 
   Open the browser → click Terminal panel → run:  codex
+
+  Local agent (each user's own machine, optional):
+    # on the user's machine (token = contents of server/.terminal-token):
+    TERMINAL_TOKEN=<token> YJS_URL=http://$HOST_IP:$PORT_WS \
+      node server/terminal-server.js 8085
+    # browser auto-connects to ws://127.0.0.1:8085 first, falls back to server
 
   tmux: attach  → tmux attach -t $SESSION
         detach  → Ctrl+B, D

@@ -93,6 +93,21 @@ latexmk -pdf main.tex
 Agent edits appear in every collaborator's editor in real time (linked documents
 via Yjs; other files via the file channel).
 
+### Security (Tier 0)
+
+By default the server enforces a **shared token** on both WebSocket ports and
+the `/apply-file` bridge:
+
+- `server/start.sh` generates `server/.terminal-token` on first run and
+  injects it into the web app (`userdata.json`) + server processes
+- Connections without `?token=` are rejected and logged
+- The terminal working directory is restricted to relative paths under
+  `~/Projects/<projectId>` (absolute paths and `..` traversal are rejected)
+- Scope: protects against port scanners and anyone who knows the server IP
+  but isn't a user of the app. It is **not** a real account system — the token
+  ships with the web app, so legitimate users can extract it. For stronger
+  protection (server-side accounts, per-project ACL, TLS), see the roadmap.
+
 ### SyncTeX
 
 - **PDF → TeX**: double-click on PDF text (enable via the floating SourceMap button)

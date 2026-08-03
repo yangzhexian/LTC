@@ -12,6 +12,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { fileStorageEventEmitter, fileStorageService } from '../../services/FileStorageService';
 import { detectFileType, isTemporaryFile } from '../../utils/fileUtils';
 import { threeWayMerge } from '../../utils/textDiffUtils';
+import { getTerminalToken } from '../../utils/terminalToken';
 
 interface TerminalPanelProps {
   className?: string;
@@ -99,9 +100,13 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const cwd = projectId ? `Projects/${projectId}` : '';
 
   const effectiveWsUrl = (() => {
+    const qs = new URLSearchParams();
+    if (cwd) qs.set('cwd', cwd);
+    const token = getTerminalToken();
+    if (token) qs.set('token', token);
+    const q = qs.size > 0 ? `?${qs.toString()}` : '';
     const base = wsUrl || `ws://${window.location.hostname}:8084`;
-    if (!cwd) return base;
-    return `${base}?cwd=${encodeURIComponent(cwd)}`;
+    return `${base}${q}`;
   })();
 
   const fontSetting = (getSetting('editor-font-size')?.value as string) || 'base';

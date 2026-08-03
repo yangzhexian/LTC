@@ -14,6 +14,7 @@ import type {
 } from '../types/collab';
 import type { YjsDocUrl } from '../types/yjs';
 import { parseUrlFragments } from '../utils/urlUtils';
+import { getTerminalToken } from '../utils/terminalToken';
 import { offlineService } from './OfflineService';
 import { createNamedLogger } from '@/logging';
 
@@ -250,9 +251,17 @@ class CollabService {
 	): CollabProvider {
 		const serverUrl = options?.websocketServer || 'ws://localhost:1234';
 
+		// Attach the shared auth token (Tier 0) to every Yjs WebSocket
+		// connection so the server can reject unauthorized clients.
+		const params: Record<string, string> = {
+			...(options?.websocketParams || {}),
+		};
+		const token = getTerminalToken();
+		if (token && !params.token) params.token = token;
+
 		return collabWebsocket.getProvider(roomName, doc, {
 			serverUrl,
-			params: options?.websocketParams,
+			params,
 		});
 	}
 

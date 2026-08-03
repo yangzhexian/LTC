@@ -12,6 +12,8 @@
 //     {type:'file-changed', path, content}  external change on disk (e.g. codex agent)
 //
 // Usage:  cd texlyre && node ../server/terminal-server.js [port]
+// Auth:   if TERMINAL_TOKEN env is set, clients must connect with ?token=...
+//         cwd is restricted to relative paths under ~/Projects/<projectId>.
 
 const { spawn } = require('node:child_process');
 const http = require('node:http');
@@ -25,6 +27,9 @@ const PORT = parseInt(process.argv[2] || '8084', 10);
 const DEFAULT_CWD = path.resolve(process.argv[3] || '.');
 // Port of the yjs-ws-server (for the /apply-file bridge)
 const YJS_PORT = parseInt(process.env.YJS_PORT || '8082', 10);
+// Shared auth token (Tier 0 protection): clients must pass ?token= in the
+// WebSocket URL. Empty string = auth disabled (local/dev only).
+const TERMINAL_TOKEN = process.env.TERMINAL_TOKEN || '';
 
 // Never crash the process on unhandled errors — log and keep serving
 process.on('uncaughtException', (err) => {
@@ -157,18 +162,36 @@ function writeFileSync(cwd, relPath, content, encoding) {
 }
 
 wss.on('connection', (ws, req) => {
-  console.log(`  [terminal] connect (${wss.clients.size} active)`);
+  let url = null;
+  try {
+    url = new URL(req.url || '/', `http://${req.headers.host}`);
+  } catch {}
 
-  // Client can request a working directory via ?cwd= query param
-  // Relative paths are resolved against $HOME (e.g. "Projects/<projectId>")
+  // ---- Auth gate: reject connections without the shared token ----
+  const token = url?.searchParams.get('token') || '';
+  if (TERMINAL_TOKEN && token !== TERMINAL_TOKEN) {
+    console.log(`  [auth] REJECTED terminal connection from ${req.socket?.remoteAddress || 'unknown'} (missing/wrong token)`);
+    ws.close(4001, 'invalid token');
+    return;
+  }
+
+  // Client can request a working directory via ?cwd= query param.
+  // SECURITY: only relative paths under ~/Projects/<projectId> are allowed —
+  // absolute paths and ".." traversal are rejected.
   let cwd = DEFAULT_CWD;
   try {
-    const url = new URL(req.url || '/', `http://${req.headers.host}`);
-    const requested = url.searchParams.get('cwd');
+    const requested = url?.searchParams.get('cwd');
     if (requested) {
-      cwd = path.isAbsolute(requested)
-        ? path.resolve(requested)
-        : path.join(os.homedir(), requested);
+      const isProjectCwd =
+        !path.isAbsolute(requested) &&
+        !requested.split(/[\\/]/).includes('..') &&
+        (requested === 'Projects' || requested.startsWith('Projects/'));
+      if (!isProjectCwd) {
+        console.log(`  [auth] REJECTED terminal connection from ${req.socket?.remoteAddress || 'unknown'} (invalid cwd: ${requested})`);
+        ws.close(4001, 'invalid cwd');
+        return;
+      }
+      cwd = path.join(os.homedir(), requested);
       if (!fs.existsSync(cwd)) {
         fs.mkdirSync(cwd, { recursive: true });
         console.log(`  [terminal] created cwd: ${cwd}`);
@@ -176,7 +199,7 @@ wss.on('connection', (ws, req) => {
     }
   } catch {}
 
-  console.log(`  [terminal] cwd: ${cwd}`);
+  console.log(`  [terminal] connect (${wss.clients.size} active), cwd: ${cwd}`);
   activeConnections.add({ ws, cwd });
   const term = spawnPty(cwd);
   let closed = false;
@@ -209,7 +232,10 @@ wss.on('connection', (ws, req) => {
         const content = buf.toString('utf8');
         fetch(`http://localhost:${YJS_PORT}/apply-file`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(TERMINAL_TOKEN ? { 'x-terminal-token': TERMINAL_TOKEN } : {}),
+          },
           body: JSON.stringify({ projectId, path: relPath, content }),
         }).catch(() => {});
       }

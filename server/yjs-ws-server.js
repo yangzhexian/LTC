@@ -17,6 +17,14 @@ const awarenessProtocol = require('y-protocols/awareness');
 
 const PORT = parseInt(process.argv[2] || '8082', 10);
 const PERSIST_DIR = path.join(__dirname, '..', '.yjs-data');
+// Shared auth token (Tier 0 protection): WebSocket clients must pass
+// ?token= in the URL; /apply-file must send an x-terminal-token header.
+// Empty string = auth disabled (local/dev only).
+const TERMINAL_TOKEN = process.env.TERMINAL_TOKEN || '';
+
+function tokenValid(candidate) {
+  return !TERMINAL_TOKEN || (typeof candidate === 'string' && candidate === TERMINAL_TOKEN);
+}
 
 // Never crash the process on unhandled errors — log and keep serving
 process.on('uncaughtException', (err) => {
@@ -163,6 +171,14 @@ const server = http.createServer((req, res) => {
     req.on('data', (c) => (body += c));
     req.on('end', () => {
       try {
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const token =
+          req.headers['x-terminal-token'] || url.searchParams.get('token') || '';
+        if (!tokenValid(token)) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid token' }));
+          return;
+        }
         const { projectId, path: relPath, content } = JSON.parse(body);
         const ok = applyToLinkedDoc(projectId, relPath, content);
         res.writeHead(ok ? 200 : 404, { 'Content-Type': 'application/json' });
@@ -182,6 +198,12 @@ const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws, req) => {
   const url = new URL(req.url || '/', `http://${req.headers.host}`);
+  // ---- Auth gate: reject connections without the shared token ----
+  if (!tokenValid(url.searchParams.get('token'))) {
+    console.log(`  [auth] REJECTED yjs connection from ${req.socket?.remoteAddress || 'unknown'} (missing/wrong token)`);
+    ws.close(4001, 'invalid token');
+    return;
+  }
   const docId = url.pathname.replace(/^\//, '') || 'default';
   const doc = getDoc(docId);
   const awareness = new awarenessProtocol.Awareness(doc);
