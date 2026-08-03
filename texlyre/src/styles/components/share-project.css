@@ -140,3 +140,76 @@
 	margin-left: auto;
 	opacity: 0.7;
 }
+
+/* ---- server members (Tier 1) ---- */
+.share-members-section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-sm);
+}
+
+.share-members-section > label {
+	font-weight: 500;
+	color: var(--text-color);
+	font-size: 0.9rem;
+}
+
+.share-members-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-xs);
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.share-member-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-sm);
+	padding: var(--space-xs) var(--space-sm);
+	min-height: 42px;
+	box-sizing: border-box;
+	background-color: var(--pico-secondary-background);
+	border: 1px solid var(--accent-border);
+	border-radius: var(--radius-sm);
+}
+
+.share-member-name {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	font-size: 0.85rem;
+	color: var(--text-color);
+	line-height: 1;
+}
+
+.share-member-owner {
+	font-size: 0.65rem;
+	color: var(--pico-primary);
+	border: 1px solid var(--pico-primary);
+	border-radius: var(--radius-sm);
+	padding: 2px var(--space-xs);
+}
+
+.share-members-loading {
+	margin: 0;
+	color: var(--pico-secondary);
+	font-size: 0.8rem;
+}
+
+.share-message {
+	margin: 0;
+	font-size: 0.8rem;
+}
+
+.share-message.success {
+	color: var(--pico-success, #28a745);
+}
+
+.share-message.error {
+	color: var(--pico-red, #c53030);
+}

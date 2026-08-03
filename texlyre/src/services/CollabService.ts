@@ -14,10 +14,42 @@ import type {
 } from '../types/collab';
 import type { YjsDocUrl } from '../types/yjs';
 import { parseUrlFragments } from '../utils/urlUtils';
-import { offlineService } from './OfflineService';
+import { t } from '@/i18n';
 import { createNamedLogger } from '@/logging';
+import { notificationService } from './NotificationService';
+import { getServerSession, joinProject } from './ServerAuthService';
+import { offlineService } from './OfflineService';
 
 const moduleLog = createNamedLogger('CollabService');
+
+// ---- access-denied toast deduplication ----
+// Rooms are "<projectId>-<collection>" (collections: yjs_<docId>,
+// yjs_metadata, chat, file_sync). Extract the project id so all rooms of one
+// project share a single dedupe key.
+function projectIdFromRoom(room: string): string | null {
+	if (typeof room !== 'string' || !room) return null;
+	const m = room.match(/^(.+?)(?:-yjs_|-chat$|-file_sync$)/);
+	return m ? m[1] : null;
+}
+
+// Persisted in localStorage with a 1h window: a denied project notifies at
+// most once per hour per browser, even across refreshes/reconnects (the old
+// in-memory Set was cleared on every reload, spamming removed members).
+const DENIED_KEY_PREFIX = 'ltc-access-denied:';
+const DENIED_WINDOW_MS = 60 * 60 * 1000;
+
+function accessDeniedRecentlyShown(key: string): boolean {
+	try {
+		const raw = localStorage.getItem(DENIED_KEY_PREFIX + key);
+		if (raw && Date.now() - Number(raw) < DENIED_WINDOW_MS) return true;
+		localStorage.setItem(DENIED_KEY_PREFIX + key, String(Date.now()));
+	} catch {}
+	return false;
+}
+
+// Attach the 4001 listener once per provider instance (avoids stacking
+// listeners when the same provider is reused across connects).
+const deniedListenerAttached = new WeakSet<object>();
 
 interface OfflineDocContainer {
 	doc: Y.Doc;
@@ -118,7 +150,9 @@ class CollabService {
 			`Creating new connection for: ${containerId} (offline: ${this.isOfflineMode()})`,
 		);
 
-		if (this.forceLocalConnections || this.isOfflineMode()) {
+		// Tier 1: without a server session the client has no server access —
+		// fall back to the local (IndexedDB-only) connection.
+		if (this.forceLocalConnections || this.isOfflineMode() || !getServerSession()) {
 			return this.createOfflineConnection(docId, collectionName, containerId);
 		}
 		return this.createOnlineConnection(
@@ -250,10 +284,65 @@ class CollabService {
 	): CollabProvider {
 		const serverUrl = options?.websocketServer || 'ws://localhost:1234';
 
-		return collabWebsocket.getProvider(roomName, doc, {
+		// Tier 1: the server session token authenticates this connection
+		// (?session=...) — it is never baked into the bundle.
+		const params: Record<string, string> = {
+			...(options?.websocketParams || {}),
+		};
+		const session = getServerSession();
+		if (session && !params.session) params.session = session.token;
+
+		const provider = collabWebsocket.getProvider(roomName, doc, {
 			serverUrl,
-			params: options?.websocketParams,
+			params,
 		});
+
+		// Tier 1: surface access denials (4001) — e.g. opening a project you
+		// are not a member of. Deduplicated PER PROJECT in localStorage with a
+		// 1h window, so a removed member isn't spammed with toasts on every
+		// reconnect/refresh (several rooms per project used to fire together).
+		// First-join race: opening a share link fires room connections before
+		// the join request completes — auto-join before warning the user.
+		if (!deniedListenerAttached.has(provider)) {
+			deniedListenerAttached.add(provider);
+			provider.on(
+				'connection-close',
+				(event: { code?: number; reason?: string }) => {
+					if (event?.code !== 4001) return;
+					const pid = projectIdFromRoom(roomName);
+					const dedupeKey = pid || roomName;
+					if (accessDeniedRecentlyShown(dedupeKey)) return;
+					const reason = String(event.reason || '');
+
+					const showDeniedToast = () => {
+						const message = reason.includes('member')
+							? t(
+									'You are not a member of this project. Open it via its share link while signed in to join automatically.',
+								)
+							: t('Your session is no longer valid. Reload the page to sign in again.');
+						notificationService.showError(message, { duration: 8000 });
+					};
+
+					if (reason.includes('member') && pid) {
+						void joinProject(pid)
+							.then((res) => {
+								if (res.ok) {
+									// Membership granted — reconnect immediately,
+									// no denial toast needed.
+									provider.connect();
+									return;
+								}
+								showDeniedToast();
+							})
+							.catch(showDeniedToast);
+						return;
+					}
+					showDeniedToast();
+				},
+			);
+		}
+
+		return provider;
 	}
 
 	public setUserInfo(docId: string, collectionName: string, user: User): void {

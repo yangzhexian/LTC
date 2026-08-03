@@ -93,6 +93,52 @@ latexmk -pdf main.tex
 Agent edits appear in every collaborator's editor in real time (linked documents
 via Yjs; other files via the file channel).
 
+### Security (Tier 1)
+
+Two layers protect the server:
+
+**1. Server-side accounts + sessions** — the web app opens on a **login
+screen**: visitors must sign in with a **server account** (register requires
+the admin's **invite code**, set at startup in `server/.invite-code`, or
+accounts can be pre-created with the admin CLI). Login issues a random
+session token (7-day sliding expiry, scrypt-hashed passwords, files stored in
+`server/.users.json` / `server/.sessions.json`, git-ignored). All WebSocket
+connections (Yjs sync + terminal) must present `?session=...` — **the session
+token is never baked into the web app**. Sessions are remembered in
+localStorage: returning browsers skip the login screen entirely, the session
+heartbeat keeps active sessions alive (no mid-work logouts), and invalidated
+sessions return you to the login screen instead of failing silently. Users
+without a session can still open the app in local-only mode ("use locally").
+
+**2. Project ACL** — projects are registered server-side on creation
+(`POST /api/projects`, owner = creator, stored in `server/.projects.json`).
+Yjs rooms and terminal working directories are only accessible to the owner
+and joined members. **Sharing a project**: just send the project link —
+anyone who opens it while signed in **joins automatically** (link-based
+membership; the project id is an unguessable UUID, so the link is the
+credential). The share dialog shows the current collaborators. Unregistered
+projects are claimed by the first person to open them.
+
+Admin CLI (`node server/manage-users.js`):
+```
+create-user <username> [password]    list-users    delete-user <username>
+list-projects                        register-project <projectId> <owner> [name]
+share <projectId> <username>         unshare <projectId> <username>
+```
+
+Notes:
+- `server/.terminal-token` still exists but is **server-internal only**
+  (terminal → yjs `/apply-file` bridge); it is no longer shipped to browsers.
+- **Migrating from before Tier 1**: browser-local accounts cannot be imported
+  (passwords were SHA-256 hashed in the browser and are unrecoverable) —
+  users simply re-register with the invite code (or the admin runs
+  `create-user`), keeping the same username if desired. Their projects are
+  registered automatically on first sign-in (`syncProjectsToServer`), and
+  projects created by other accounts can be migrated with the CLI:
+  `register-project <id> <owner>`.
+- Remaining roadmap: per-OS-user terminal isolation, TLS reverse proxy,
+  connection rate limits, audit log.
+
 ### SyncTeX
 
 - **PDF → TeX**: double-click on PDF text (enable via the floating SourceMap button)
@@ -108,7 +154,9 @@ LTC/
 ├── server/
 │   ├── start.sh           # One-command launcher (build + tmux + verify)
 │   ├── yjs-ws-server.js   # Yjs WebSocket server (sync, persistence, /apply-file)
-│   └── terminal-server.js # Browser terminal + bidirectional file sync (node-pty)
+│   ├── terminal-server.js # Browser terminal + bidirectional file sync (node-pty)
+│   ├── auth.js            # Tier 1 accounts/sessions/project ACL (scrypt, files)
+│   └── manage-users.js    # Admin CLI for accounts + project sharing
 ├── texlyre/               # TeXlyre fork (editor, WASM compilers, plugins)
 │   ├── src/
 │   │   ├── components/ai/TerminalPanel.tsx   # Terminal tab (xterm.js)

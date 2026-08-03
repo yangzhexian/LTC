@@ -280,6 +280,14 @@ class AuthService {
 		await this.db?.put(this.USER_STORE, upgradedUser);
 		await this.db?.delete(this.USER_STORE, oldGuestId);
 
+		// Tier 1: register the upgraded user's projects with the server
+		// (project ACL) now that they have a server session.
+		const { registerProject } = await import('./ServerAuthService');
+		const upgradedProjects = await this.getProjectsByUser(newUserId);
+		for (const project of upgradedProjects) {
+			registerProject(project.id, project.name).catch(() => {});
+		}
+
 		this.currentUser = upgradedUser;
 		localStorage.setItem('texlyre-current-user', newUserId);
 
@@ -652,11 +660,35 @@ class AuthService {
 
 		await this.db?.put(this.PROJECT_STORE, newProject);
 
+		// Tier 1: register the project with the server so the owner becomes a
+		// member (project ACL). No-op when not signed in.
+		const { registerProject } = await import('./ServerAuthService');
+		registerProject(projectId, project.name).catch(() => {});
+
 		if (shouldAutoSync()) {
 			fileSystemBackupService.synchronize(newProject.id).catch(console.error);
 		}
 
 		return newProject;
+	}
+
+	// Tier 1 migration: register ALL local projects with the server (idempotent).
+	// Used after signing in so pre-Tier-1 projects created in the browser are
+	// accessible again — the signer becomes owner (projects already registered
+	// to someone else are skipped server-side). No-op when not signed in.
+	async syncProjectsToServer(): Promise<void> {
+		try {
+			const projects = await this.getProjects();
+			if (projects.length === 0) return;
+			const { registerProject } = await import('./ServerAuthService');
+			await Promise.all(
+				projects.map((project) =>
+					registerProject(project.id, project.name).catch(() => {}),
+				),
+			);
+		} catch (error) {
+			moduleLog.warn('Failed to sync projects to server:', error);
+		}
 	}
 
 	async updateProject(project: Project): Promise<Project> {

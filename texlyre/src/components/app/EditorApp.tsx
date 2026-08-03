@@ -84,7 +84,8 @@ const EditorAppView: React.FC<EditorAppProps> = ({
 	} = useCollab<DocumentList>();
 	const hasDoc = !!doc;
 
-	const { user, updateProject, getProjectById, isGuestUser } = useAuth();
+	const { user, updateProject, getProjectById, createProject, isGuestUser } =
+		useAuth();
 	const {
 		status,
 		activities,
@@ -144,6 +145,48 @@ const EditorAppView: React.FC<EditorAppProps> = ({
 	);
 
 	useGlobalKeyboard();
+
+	// Tier 1: link-based membership — opening a project automatically adds the
+	// signed-in user as a member (idempotent), and makes the project visible
+	// in the local project list when it was opened via a share link (opening a
+	// #yjs: link does not create a local project record by itself).
+	const projectId = docUrl.startsWith('yjs:') ? docUrl.slice(4) : docUrl;
+	const authApiRef = useRef({ getProjectById, createProject });
+	authApiRef.current = { getProjectById, createProject };
+	useEffect(() => {
+		if (!projectId) return;
+		let cancelled = false;
+		(async () => {
+			try {
+				const {
+					joinProject,
+					getProjectMembers,
+				} = await import('../../services/ServerAuthService');
+				const joinResult = await joinProject(projectId);
+				if (cancelled) return;
+
+				const existing = await authApiRef.current.getProjectById(projectId);
+				if (cancelled || existing) return;
+
+				const name = joinResult.ok
+					? (await getProjectMembers(projectId)).project?.name
+					: undefined;
+				await authApiRef.current.createProject({
+					name: name || 'Shared Project',
+					description: '',
+					type: 'latex',
+					tags: [],
+					isFavorite: false,
+					docUrl: `yjs:${projectId}`,
+				});
+			} catch (error) {
+				moduleLog.warn('Failed to join project via link:', error);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [projectId]);
 
 	const updateContent = (docId: string, content: string) => {
 		changeDoc((d) => {
@@ -784,6 +827,7 @@ const EditorAppView: React.FC<EditorAppProps> = ({
 				onClose={() => setShowShareModal(false)}
 				projectName={projectName}
 				shareUrl={shareUrl}
+				projectId={docUrl.startsWith('yjs:') ? docUrl.slice(4) : docUrl}
 			/>
 
 			{!isGuestUser(user) && (

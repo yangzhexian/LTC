@@ -12,6 +12,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { fileStorageEventEmitter, fileStorageService } from '../../services/FileStorageService';
 import { detectFileType, isTemporaryFile } from '../../utils/fileUtils';
 import { threeWayMerge } from '../../utils/textDiffUtils';
+import { getServerSession } from '../../services/ServerAuthService';
 
 interface TerminalPanelProps {
   className?: string;
@@ -99,9 +100,14 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
   const cwd = projectId ? `Projects/${projectId}` : '';
 
   const effectiveWsUrl = (() => {
+    const qs = new URLSearchParams();
+    if (cwd) qs.set('cwd', cwd);
+    // Tier 1: the server session token authenticates this connection
+    const session = getServerSession();
+    if (session) qs.set('session', session.token);
+    const q = qs.size > 0 ? `?${qs.toString()}` : '';
     const base = wsUrl || `ws://${window.location.hostname}:8084`;
-    if (!cwd) return base;
-    return `${base}?cwd=${encodeURIComponent(cwd)}`;
+    return `${base}${q}`;
   })();
 
   const fontSetting = (getSetting('editor-font-size')?.value as string) || 'base';
@@ -459,6 +465,16 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
 
     const connect = () => {
       if (closed) return;
+      // Tier 1: the server terminal requires a signed-in session
+      if (!getServerSession()) {
+        term.write(
+          '\r\n\x1b[31m[Agent] not signed in — the server terminal needs a server account.\x1b[0m\r\n',
+        );
+        term.write(
+          '\x1b[33m[Agent] Reload the page and sign in to use the terminal.\x1b[0m\r\n',
+        );
+        return;
+      }
       ws = new WebSocket(effectiveWsUrl);
       wsRef.current = ws;
 
@@ -499,9 +515,30 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({
         term.write(event.data);
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
         setIsConnected(false);
         if (!closed) {
+          // Tier 1: the server rejected us (4001) — surface the real reason
+          // instead of reconnecting forever.
+          if (event?.code === 4001) {
+            const reason = String(event.reason || '');
+            if (reason.includes('member')) {
+              term.write(
+                '\r\n\x1b[31m[Agent] access denied — you are not a member of this project.\x1b[0m\r\n',
+              );
+              term.write(
+                '\x1b[33m[Agent] Open this project via its share link while signed in to join automatically.\x1b[0m\r\n\r\n',
+              );
+            } else {
+              term.write(
+                '\r\n\x1b[31m[Agent] your session is no longer valid.\x1b[0m\r\n',
+              );
+              term.write(
+                '\x1b[33m[Agent] Reload the page and sign in again.\x1b[0m\r\n\r\n',
+              );
+            }
+            return;
+          }
           term.write('\r\n\x1b[31mDisconnected — reconnecting...\x1b[0m\r\n');
           reconnectTimer = setTimeout(connect, 2000);
         }
