@@ -116,9 +116,8 @@ Yjs rooms and terminal working directories are only accessible to the owner
 and joined members. **Sharing a project**: just send the project link —
 anyone who opens it while signed in **joins automatically** (link-based
 membership; the project id is an unguessable UUID, so the link is the
-credential). The share dialog shows the current collaborators and lets the
-owner remove people; the admin CLI can do the same (`share`/`unshare`).
-Unregistered projects are claimed by the first person to open them.
+credential). The share dialog shows the current collaborators. Unregistered
+projects are claimed by the first person to open them.
 
 Admin CLI (`node server/manage-users.js`):
 ```

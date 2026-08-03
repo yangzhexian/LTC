@@ -9,7 +9,6 @@ import Modal from '../common/Modal';
 import {
 	getProjectMembers,
 	getServerSession,
-	unshareProject,
 	type ProjectMembers,
 } from '../../services/ServerAuthService';
 
@@ -30,13 +29,7 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 }) => {
 	const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
 	const [members, setMembers] = useState<ProjectMembers | null>(null);
-	const [busy, setBusy] = useState(false);
-	const [message, setMessage] = useState('');
 	const [error, setError] = useState('');
-
-	const session = getServerSession();
-	const currentUsername = session?.username || '';
-	const isOwner = !!members && members.owner === currentUsername;
 
 	const loadMembers = async () => {
 		if (!projectId) return;
@@ -67,21 +60,6 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 			void loadMembers();
 		}
 	}, [isOpen, shareUrl, projectId]);
-
-	const handleRemove = async (username: string) => {
-		if (busy || !projectId) return;
-		setBusy(true);
-		setMessage('');
-		setError('');
-		const result = await unshareProject(projectId, username);
-		setBusy(false);
-		if (result.ok) {
-			setMessage(`${username} removed`);
-			void loadMembers();
-		} else {
-			setError(result.error || 'Remove failed');
-		}
-	};
 
 	return (
 		<Modal
@@ -136,16 +114,6 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 												<span className='share-member-owner'>{t('Owner')}</span>
 											)}
 										</span>
-										{isOwner && username !== members.owner && (
-											<button
-												className='share-member-remove'
-												type='button'
-												disabled={busy}
-												onClick={() => void handleRemove(username)}
-											>
-												{t('Remove')}
-											</button>
-										)}
 									</li>
 								))}
 							</ul>
@@ -153,7 +121,6 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 							<p className='share-members-loading'>{t('Loading members...')}</p>
 						)}
 
-						{message && <p className='share-message success'>{message}</p>}
 						{error && <p className='share-message error'>{error}</p>}
 					</div>
 				)}
@@ -169,11 +136,6 @@ const ShareProjectModal: React.FC<ShareProjectModalProps> = ({
 						<li>
 							{t(
 								'Anyone who opened the link can edit documents and files in real-time',
-							)}
-						</li>
-						<li>
-							{t(
-								'The owner can remove collaborators from the list above',
 							)}
 						</li>
 					</ul>

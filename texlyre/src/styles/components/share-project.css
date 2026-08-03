@@ -195,26 +195,6 @@
 	padding: 2px var(--space-xs);
 }
 
-.share-member-remove {
-	background-color: #dc3545;
-	color: #fff;
-	border: none;
-	border-radius: 6px;
-	padding: 6px 14px;
-	font-size: 0.75rem;
-	line-height: 1;
-	cursor: pointer;
-}
-
-.share-member-remove:hover:not(:disabled) {
-	background-color: #c53030;
-}
-
-.share-member-remove:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
-
 .share-members-loading {
 	margin: 0;
 	color: var(--pico-secondary);

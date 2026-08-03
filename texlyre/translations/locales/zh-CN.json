@@ -1553,8 +1553,6 @@
   "Original file not found": "未找到原始文件",
   "Only the owner and invited members can access the project": "只有所有者和被邀请的成员才能访问该项目",
   "Owner": "所有者",
-  "Remove": "移除",
-  "The owner can remove collaborators from the list above": "所有者可以从上面的列表中移除协作者",
   "The project owner invites collaborators by their server username": "项目所有者通过服务器用户名邀请协作者",
   "Username to invite": "要邀请的用户名",
   "You are not a member of this project. Open it via its share link while signed in to join automatically.": "你不是该项目的成员，请在登录状态下通过分享链接打开该项目以自动加入。",
