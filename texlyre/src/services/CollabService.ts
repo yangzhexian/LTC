@@ -22,9 +22,34 @@ import { offlineService } from './OfflineService';
 
 const moduleLog = createNamedLogger('CollabService');
 
-// Rooms already flagged with an access-denied toast (avoid spam: every
-// project opens several rooms — metadata, chat, file_sync, documents).
-const accessDeniedRooms = new Set<string>();
+// ---- access-denied toast deduplication ----
+// Rooms are "<projectId>-<collection>" (collections: yjs_<docId>,
+// yjs_metadata, chat, file_sync). Extract the project id so all rooms of one
+// project share a single dedupe key.
+function projectIdFromRoom(room: string): string | null {
+	if (typeof room !== 'string' || !room) return null;
+	const m = room.match(/^(.+?)(?:-yjs_|-chat$|-file_sync$)/);
+	return m ? m[1] : null;
+}
+
+// Persisted in localStorage with a 1h window: a denied project notifies at
+// most once per hour per browser, even across refreshes/reconnects (the old
+// in-memory Set was cleared on every reload, spamming removed members).
+const DENIED_KEY_PREFIX = 'ltc-access-denied:';
+const DENIED_WINDOW_MS = 60 * 60 * 1000;
+
+function accessDeniedRecentlyShown(key: string): boolean {
+	try {
+		const raw = localStorage.getItem(DENIED_KEY_PREFIX + key);
+		if (raw && Date.now() - Number(raw) < DENIED_WINDOW_MS) return true;
+		localStorage.setItem(DENIED_KEY_PREFIX + key, String(Date.now()));
+	} catch {}
+	return false;
+}
+
+// Attach the 4001 listener once per provider instance (avoids stacking
+// listeners when the same provider is reused across connects).
+const deniedListenerAttached = new WeakSet<object>();
 
 interface OfflineDocContainer {
 	doc: Y.Doc;
@@ -273,13 +298,17 @@ class CollabService {
 		});
 
 		// Tier 1: surface access denials (4001) — e.g. opening a project you
-		// are not a member of. Shown once per room to avoid toast spam.
-		if (!accessDeniedRooms.has(roomName)) {
+		// are not a member of. Deduplicated PER PROJECT in localStorage with a
+		// 1h window, so a removed member isn't spammed with toasts on every
+		// reconnect/refresh (several rooms per project used to fire together).
+		if (!deniedListenerAttached.has(provider)) {
+			deniedListenerAttached.add(provider);
 			provider.on(
 				'connection-close',
 				(event: { code?: number; reason?: string }) => {
-					if (event?.code !== 4001 || accessDeniedRooms.has(roomName)) return;
-					accessDeniedRooms.add(roomName);
+					if (event?.code !== 4001) return;
+					const dedupeKey = projectIdFromRoom(roomName) || roomName;
+					if (accessDeniedRecentlyShown(dedupeKey)) return;
 					const reason = String(event.reason || '');
 					const message = reason.includes('member')
 						? t(
